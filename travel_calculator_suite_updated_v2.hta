@@ -1,0 +1,610 @@
+<html>
+<head>
+<title>Travel Calculator Suite</title>
+<HTA:APPLICATION
+  APPLICATIONNAME="Travel Calculator Suite"
+  BORDER="thick"
+  CAPTION="yes"
+  SHOWINTASKBAR="yes"
+  SINGLEINSTANCE="yes"
+  WINDOWSTATE="normal"
+  RESIZE="yes"
+  SCROLL="yes"
+  MINIMIZEBUTTON="yes"
+  MAXIMIZEBUTTON="yes"
+/>
+<meta http-equiv="X-UA-Compatible" content="IE=9" />
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  background: #f3f4f6;
+  color: #111827;
+  overflow: auto;
+}
+body.dark {
+  background: #111827;
+  color: #f3f4f6;
+}
+.app {
+  box-sizing: border-box;
+  padding: 1em;
+  width: 100%;
+}
+.header {
+  margin-bottom: 1em;
+}
+h1 {
+  margin: 0;
+  font-size: 1.6em;
+}
+.tabs {
+  margin: 1em 0;
+}
+.tabBtn {
+  padding: 0.7em 1em;
+  font-size: 0.95em;
+  border: 1px solid #9aa3af;
+  border-radius: 0.35em;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 0.5em;
+  margin-bottom: 0.5em;
+}
+.tabBtn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+body.dark .tabBtn {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+body.dark .tabBtn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.tabPane {
+  display: none;
+}
+.tabPane.active {
+  display: block;
+}
+.layout {
+  width: 100%;
+  font-size: 0;
+}
+.col {
+  display: inline-block;
+  vertical-align: top;
+  width: 49%;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+.colRight {
+  margin-left: 2%;
+}
+.panel {
+  box-sizing: border-box;
+  border: 1px solid #cfd4dc;
+  border-radius: 0.5em;
+  background: #ffffff;
+  padding: 1em;
+  margin-bottom: 1em;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+body.dark .panel {
+  background: #1f2937;
+  border-color: #374151;
+}
+.panel h2 {
+  margin: 0 0 0.75em 0;
+  font-size: 1.15em;
+}
+.field {
+  margin-bottom: 0.9em;
+}
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 0.35em;
+  font-size: 0.95em;
+}
+input, select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6em;
+  border: 1px solid #b8bec7;
+  border-radius: 0.3em;
+  font-size: 1em;
+  background: #ffffff;
+  color: #111827;
+}
+body.dark input, body.dark select {
+  background: #111827;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+button {
+  padding: 0.65em 1em;
+  font-size: 0.95em;
+  border: 1px solid #9aa3af;
+  border-radius: 0.35em;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 0.5em;
+  margin-bottom: 0.5em;
+}
+body.dark button {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+button.primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.themeRow {
+  margin-bottom: 1em;
+  text-align: right;
+  font-size: 14px;
+}
+.note {
+  margin-top: 0.8em;
+  color: #555;
+  font-size: 0.88em;
+  line-height: 1.4;
+}
+body.dark .note {
+  color: #d1d5db;
+}
+.error {
+  color: #b00020;
+  font-weight: bold;
+  margin-top: 0.8em;
+  line-height: 1.4;
+}
+body.dark .error {
+  color: #fda4af;
+}
+.summaryRow {
+  margin-bottom: 0.55em;
+  line-height: 1.45;
+  font-size: 0.96em;
+}
+.lineItem {
+  padding: 0.7em 0.8em;
+  margin-bottom: 0.45em;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.35em;
+  background: #fafafa;
+  line-height: 1.45;
+  font-size: 0.96em;
+}
+body.dark .lineItem {
+  background: #111827;
+  border-color: #374151;
+}
+.instructionsBox {
+  white-space: pre-line;
+  line-height: 1.45;
+  font-size: 0.94em;
+}
+</style>
+
+<script type="text/javascript">
+function byId(id) { return document.getElementById(id); }
+function roundToDollar(value) { return Math.round(value); }
+function roundMoney(value) { return Math.round(value * 100) / 100; }
+function formatMoney(value) { return "$" + roundMoney(value).toFixed(2); }
+
+function getParticipantWidth() {
+  if (document.documentElement && document.documentElement.participantWidth) return document.documentElement.participantWidth;
+  if (document.body && document.body.participantWidth) return document.body.participantWidth;
+  return 900;
+}
+function getParticipantHeight() {
+  if (document.documentElement && document.documentElement.participantHeight) return document.documentElement.participantHeight;
+  if (document.body && document.body.participantHeight) return document.body.participantHeight;
+  return 700;
+}
+function getBaseFontPx() {
+  var size = 16;
+  if (document.body && document.body.currentStyle && document.body.currentStyle.fontSize) {
+    var raw = document.body.currentStyle.fontSize;
+    if (raw.indexOf("px") > -1) size = parseFloat(raw);
+  }
+  return size;
+}
+
+function showTab(tabName) {
+  byId("paymentsTab").className = "tabPane" + (tabName === "payments" ? " active" : "");
+  byId("refundTab").className = "tabPane" + (tabName === "refund" ? " active" : "");
+  byId("paymentsTabBtn").className = "tabBtn" + (tabName === "payments" ? " active" : "");
+  byId("refundTabBtn").className = "tabBtn" + (tabName === "refund" ? " active" : "");
+  setPanelHeights();
+}
+
+function setTheme() {
+  document.body.className = byId("darkMode").checked ? "dark" : "";
+  setPanelHeights();
+}
+
+function setPanelHeights() {
+  var width = getParticipantWidth();
+  var height = getParticipantHeight();
+  var fontPx = getBaseFontPx();
+
+  var groups = [
+    { left: "leftCol1", right: "rightCol1", summary: "summaryPanel1", results: "resultsPanel1", box: "resultsBox1" },
+    { left: "leftCol2", right: "rightCol2", summary: "summaryPanel2", results: "resultsPanel2", box: "resultsBox2" }
+  ];
+
+  for (var g = 0; g < groups.length; g++) {
+    var leftCol = byId(groups[g].left);
+    var rightCol = byId(groups[g].right);
+    var summaryPanel = byId(groups[g].summary);
+    var resultsPanel = byId(groups[g].results);
+    var resultsBox = byId(groups[g].box);
+    if (!leftCol) continue;
+
+    if (width < 760) {
+      leftCol.style.width = "100%";
+      rightCol.style.width = "100%";
+      rightCol.style.marginLeft = "0";
+      summaryPanel.style.minHeight = (fontPx * 8) + "px";
+      resultsPanel.style.minHeight = (fontPx * 10) + "px";
+      resultsBox.style.maxHeight = "";
+      resultsBox.style.overflowY = "visible";
+    } else {
+      leftCol.style.width = "49%";
+      rightCol.style.width = "49%";
+      rightCol.style.marginLeft = "2%";
+      summaryPanel.style.minHeight = Math.max(fontPx * 11, height * 0.24) + "px";
+      resultsPanel.style.minHeight = Math.max(fontPx * 16, height * 0.42) + "px";
+      resultsBox.style.maxHeight = Math.max(fontPx * 18, height * 0.46) + "px";
+      resultsBox.style.overflowY = "auto";
+    }
+  }
+}
+
+function getDepositAmount(packagePrice) {
+  var depositType = byId("depositType").value;
+  var depositPercent = parseFloat(byId("depositPercent").value);
+  var depositAmountInput = parseFloat(byId("depositAmount").value);
+
+  if (depositType === "percent") {
+    if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
+    if (depositPercent < 0) return { ok: false, message: "Deposit percentage cannot be negative." };
+    return {
+      ok: true,
+      amount: roundToDollar(packagePrice * (depositPercent / 100)),
+      label: "Deposit percentage",
+      valueText: depositPercent + "%"
+    };
+  }
+
+  if (isNaN(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
+  if (depositAmountInput < 0) return { ok: false, message: "Deposit amount cannot be negative." };
+
+  return {
+    ok: true,
+    amount: roundToDollar(depositAmountInput),
+    label: "Deposit amount",
+    valueText: formatMoney(roundToDollar(depositAmountInput)) + " (rounded to nearest dollar)"
+  };
+}
+
+function updateDepositInputs() {
+  var depositType = byId("depositType").value;
+  byId("depositPercentWrap").style.display = depositType === "percent" ? "block" : "none";
+  byId("depositAmountWrap").style.display = depositType === "amount" ? "block" : "none";
+  calculatePayments();
+}
+
+function calculatePayments() {
+  var packagePrice = parseFloat(byId("packagePrice").value);
+  var totalPayments = parseInt(byId("totalPayments").value, 10);
+  var firstMatches = byId("firstMatchesDeposit").value === "yes";
+
+  byId("errorBox1").innerHTML = "";
+  byId("summaryBox1").innerHTML = "";
+  byId("resultsBox1").innerHTML = "";
+
+  if (isNaN(packagePrice) || isNaN(totalPayments)) {
+    byId("errorBox1").innerHTML = "Please enter valid numbers.";
+    setPanelHeights();
+    return;
+  }
+  if (packagePrice < 0) {
+    byId("errorBox1").innerHTML = "Package price cannot be negative.";
+    setPanelHeights();
+    return;
+  }
+  if (totalPayments < 1) {
+    byId("errorBox1").innerHTML = "Number of payments must be at least 1.";
+    setPanelHeights();
+    return;
+  }
+
+  var depositInfo = getDepositAmount(packagePrice);
+  if (!depositInfo.ok) {
+    byId("errorBox1").innerHTML = depositInfo.message;
+    setPanelHeights();
+    return;
+  }
+
+  var deposit = depositInfo.amount;
+  var summaryHtml = "";
+  var resultsHtml = "";
+  var remainder = 0;
+  var eachPayment = 0;
+  var remainingCount = 0;
+  var i = 0;
+
+  resultsHtml += '<div class="lineItem"><strong>Deposit:</strong> ' + formatMoney(deposit) + '</div>';
+
+  if (firstMatches) {
+    var firstPayment = deposit;
+    resultsHtml += '<div class="lineItem"><strong>Payment 1:</strong> ' + formatMoney(firstPayment) + '</div>';
+
+    remainder = roundMoney(packagePrice - deposit - firstPayment);
+    remainingCount = totalPayments - 1;
+    eachPayment = remainingCount > 0 ? roundMoney(remainder / remainingCount) : 0;
+
+    for (i = 0; i < remainingCount; i++) {
+      resultsHtml += '<div class="lineItem"><strong>Payment ' + (i + 2) + ':</strong> ' + formatMoney(eachPayment) + '</div>';
+    }
+
+    summaryHtml += '<div class="summaryRow"><strong>' + depositInfo.label + ':</strong> ' + depositInfo.valueText + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Deposit used:</strong> ' + formatMoney(deposit) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Payment 1 matches deposit:</strong> Yes</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining balance after deposit and Payment 1:</strong> ' + formatMoney(remainder) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining payments after Payment 1:</strong> ' + remainingCount + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Each remaining payment:</strong> ' + formatMoney(eachPayment) + '</div>';
+  } else {
+    remainder = roundMoney(packagePrice - deposit);
+    eachPayment = roundMoney(remainder / totalPayments);
+
+    for (i = 0; i < totalPayments; i++) {
+      resultsHtml += '<div class="lineItem"><strong>Payment ' + (i + 1) + ':</strong> ' + formatMoney(eachPayment) + '</div>';
+    }
+
+    summaryHtml += '<div class="summaryRow"><strong>' + depositInfo.label + ':</strong> ' + depositInfo.valueText + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Deposit used:</strong> ' + formatMoney(deposit) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Payment 1 matches deposit:</strong> No</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining balance after deposit:</strong> ' + formatMoney(remainder) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Number of even payments:</strong> ' + totalPayments + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Each payment:</strong> ' + formatMoney(eachPayment) + '</div>';
+  }
+
+  byId("summaryBox1").innerHTML = summaryHtml;
+  byId("resultsBox1").innerHTML = resultsHtml;
+  setPanelHeights();
+}
+
+function resetPayments() {
+  byId("packagePrice").value = "2500";
+  byId("depositType").value = "percent";
+  byId("depositPercent").value = "20";
+  byId("depositAmount").value = "500";
+  byId("totalPayments").value = "6";
+  byId("firstMatchesDeposit").value = "yes";
+  updateDepositInputs();
+}
+
+function calculateRefund() {
+  var totalCost = parseFloat(byId("refundTotalCost").value);
+  var amountPaid = parseFloat(byId("refundAmountPaid").value);
+  var tpp = parseFloat(byId("refundTpp").value);
+
+  byId("errorBox2").innerHTML = "";
+  byId("summaryBox2").innerHTML = "";
+  byId("resultsBox2").innerHTML = "";
+
+  if (isNaN(totalCost) || isNaN(amountPaid) || isNaN(tpp)) {
+    byId("errorBox2").innerHTML = "Please enter valid non-negative numbers.";
+    setPanelHeights();
+    return;
+  }
+  if (totalCost < 0 || amountPaid < 0 || tpp < 0) {
+    byId("errorBox2").innerHTML = "Negative values are not allowed.";
+    setPanelHeights();
+    return;
+  }
+
+  var twentyPercent = roundMoney(totalCost * 0.20);
+  var nonRefundable = roundMoney(tpp + twentyPercent);
+  var refund = roundMoney(Math.max(amountPaid - nonRefundable, 0));
+  var now = new Date();
+  var stamp = now.getFullYear() + "-" +
+    ("0" + (now.getMonth() + 1)).slice(-2) + "-" +
+    ("0" + now.getDate()).slice(-2) + " " +
+    ("0" + now.getHours()).slice(-2) + ":" +
+    ("0" + now.getMinutes()).slice(-2) + ":" +
+    ("0" + now.getSeconds()).slice(-2);
+
+  var summaryHtml = "";
+  summaryHtml += '<div class="summaryRow"><strong>Calculation time:</strong> ' + stamp + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Total Package Cost:</strong> ' + formatMoney(totalCost) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Amount Paid:</strong> ' + formatMoney(amountPaid) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>TPP:</strong> ' + formatMoney(tpp) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>20% of Package Cost:</strong> ' + formatMoney(twentyPercent) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Non-Refundable (TPP + 20%):</strong> ' + formatMoney(nonRefundable) + '</div>';
+
+  var resultHtml = "";
+  resultHtml += '<div class="lineItem"><strong>Refund Due:</strong> ' + formatMoney(refund) + '</div>';
+  if (refund === 0) {
+    resultHtml += '<div class="lineItem">No refund is due.</div>';
+  }
+  resultHtml += '<div class="lineItem"><strong>Formula used:</strong> Amount Paid - (TPP + 20% of Package Cost)</div>';
+
+  byId("summaryBox2").innerHTML = summaryHtml;
+  byId("resultsBox2").innerHTML = resultHtml;
+  setPanelHeights();
+}
+
+function resetRefund() {
+  byId("refundTotalCost").value = "";
+  byId("refundAmountPaid").value = "";
+  byId("refundTpp").value = "";
+  byId("summaryBox2").innerHTML = "";
+  byId("resultsBox2").innerHTML = "";
+  byId("errorBox2").innerHTML = "";
+  setPanelHeights();
+}
+
+function initApp() {
+  setTheme();
+  showTab("payments");
+  updateDepositInputs();
+  setPanelHeights();
+}
+window.onload = initApp;
+window.onresize = function() { setPanelHeights(); };
+</script>
+</head>
+
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="themeRow">
+        <label style="display:inline; font-weight:normal;">
+          <input id="darkMode" type="checkbox" onclick="setTheme()" style="width:auto; margin-right:6px;" />
+          Dark mode
+        </label>
+      </div>
+      <h1>Travel Calculator Suite</h1>
+    </div>
+
+    <div class="tabs">
+      <button id="paymentsTabBtn" class="tabBtn active" onclick="showTab('payments')">Payment Calculator</button>
+      <button id="refundTabBtn" class="tabBtn" onclick="showTab('refund')">Refund Calculator</button>
+    </div>
+
+    <div id="paymentsTab" class="tabPane active">
+      <div class="layout">
+        <div class="col" id="leftCol1">
+          <div class="panel">
+            <div class="field">
+              <label for="packagePrice">Package Price</label>
+              <input id="packagePrice" type="text" value="2500" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="depositType">Deposit Type</label>
+              <select id="depositType" onchange="updateDepositInputs()">
+                <option value="percent" selected="selected">Percentage</option>
+                <option value="amount">Dollar Amount</option>
+              </select>
+            </div>
+            <div class="field" id="depositPercentWrap">
+              <label for="depositPercent">Custom Deposit Percentage</label>
+              <input id="depositPercent" type="text" value="20" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field" id="depositAmountWrap" style="display:none;">
+              <label for="depositAmount">Custom Deposit Dollar Amount</label>
+              <input id="depositAmount" type="text" value="500" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="totalPayments">Total Number of Payments</label>
+              <input id="totalPayments" type="text" value="6" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="firstMatchesDeposit">Does Payment 1 Match the Deposit?</label>
+              <select id="firstMatchesDeposit" onchange="calculatePayments()">
+                <option value="yes" selected="selected">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <button class="primary" onclick="calculatePayments()">Calculate</button>
+            <button onclick="resetPayments()">Reset</button>
+            <div class="error" id="errorBox1"></div>
+            <div class="note">Use either a percentage-based deposit or a fixed dollar deposit.</div>
+          </div>
+        </div>
+        <div class="col colRight" id="rightCol1">
+          <div class="panel" id="summaryPanel1">
+            <h2>Summary</h2>
+            <div id="summaryBox1"></div>
+          </div>
+          <div class="panel" id="resultsPanel1">
+            <h2>Payment Breakdown</h2>
+            <div id="resultsBox1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="refundTab" class="tabPane">
+      <div class="layout">
+        <div class="col" id="leftCol2">
+          <div class="panel">
+            <div class="field">
+              <label for="refundTotalCost">Total Package Cost</label>
+              <input id="refundTotalCost" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <div class="field">
+              <label for="refundAmountPaid">Amount Participant Paid</label>
+              <input id="refundAmountPaid" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <div class="field">
+              <label for="refundTpp">TPP Amount</label>
+              <input id="refundTpp" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <button class="primary" onclick="calculateRefund()">Calculate</button>
+            <button onclick="resetRefund()">Clear</button>
+            <div class="error" id="errorBox2"></div>
+            <div class="note">Non-refundable is calculated as TPP + 20% of Total Package Cost.</div>
+          </div>
+
+          <div class="panel">
+            <h2>Instructions</h2>
+            <div class="instructionsBox">
+Step 1: Total Package Cost
+- Enter the cost of occupancy packages only
+- Do NOT include TPP in this total
+- If there are multiple packages, add them together first
+
+Step 2: Amount Paid
+- Go to the Transaction Summary
+- Locate the line labeled "Amount Paid"
+- Enter that amount
+
+Step 3: TPP Cost
+- Enter the total cost of the Trip Protection Plan
+- If there are multiple TPPs, add them together before entering
+
+Step 4: Calculate
+- Click the "Calculate" button
+- The refund amount will appear at the bottom
+            </div>
+          </div>
+        </div>
+
+        <div class="col colRight" id="rightCol2">
+          <div class="panel" id="summaryPanel2">
+            <h2>Summary</h2>
+            <div id="summaryBox2"></div>
+          </div>
+          <div class="panel" id="resultsPanel2">
+            <h2>Refund Result</h2>
+            <div id="resultsBox2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
