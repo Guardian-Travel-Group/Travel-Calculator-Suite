@@ -1,0 +1,816 @@
+<html>
+<head>
+<title>Travel Calculator Suite</title>
+<HTA:APPLICATION
+  APPLICATIONNAME="Travel Calculator Suite"
+  BORDER="thick"
+  CAPTION="yes"
+  SHOWINTASKBAR="yes"
+  SINGLEINSTANCE="yes"
+  WINDOWSTATE="normal"
+  RESIZE="yes"
+  SCROLL="yes"
+  MINIMIZEBUTTON="yes"
+  MAXIMIZEBUTTON="yes"
+/>
+<meta http-equiv="X-UA-Compatible" content="IE=9" />
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+body {
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  background: #f3f4f6;
+  color: #111827;
+  overflow: auto;
+}
+body.dark {
+  background: #111827;
+  color: #f3f4f6;
+}
+.app {
+  box-sizing: border-box;
+  padding: 1em;
+  width: 100%;
+}
+.header {
+  margin-bottom: 1em;
+}
+h1 {
+  margin: 0;
+  font-size: 1.6em;
+}
+.tabs {
+  margin: 1em 0;
+}
+.tabBtn {
+  padding: 0.7em 1em;
+  font-size: 0.95em;
+  border: 1px solid #9aa3af;
+  border-radius: 0.35em;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 0.5em;
+  margin-bottom: 0.5em;
+}
+.tabBtn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+body.dark .tabBtn {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+body.dark .tabBtn.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.tabPane {
+  display: none;
+}
+.tabPane.active {
+  display: block;
+}
+.layout {
+  width: 100%;
+  font-size: 0;
+}
+.col {
+  display: inline-block;
+  vertical-align: top;
+  width: 49%;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+.colRight {
+  margin-left: 2%;
+}
+.panel {
+  box-sizing: border-box;
+  border: 1px solid #cfd4dc;
+  border-radius: 0.5em;
+  background: #ffffff;
+  padding: 1em;
+  margin-bottom: 1em;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+body.dark .panel {
+  background: #1f2937;
+  border-color: #374151;
+}
+.panel h2 {
+  margin: 0 0 0.75em 0;
+  font-size: 1.15em;
+}
+.field {
+  margin-bottom: 0.9em;
+}
+label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 0.35em;
+  font-size: 0.95em;
+}
+input, select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.6em;
+  border: 1px solid #b8bec7;
+  border-radius: 0.3em;
+  font-size: 1em;
+  background: #ffffff;
+  color: #111827;
+}
+body.dark input, body.dark select {
+  background: #111827;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+button {
+  padding: 0.65em 1em;
+  font-size: 0.95em;
+  border: 1px solid #9aa3af;
+  border-radius: 0.35em;
+  background: #e5e7eb;
+  color: #111827;
+  cursor: pointer;
+  margin-right: 0.5em;
+  margin-bottom: 0.5em;
+}
+body.dark button {
+  background: #374151;
+  color: #f3f4f6;
+  border-color: #4b5563;
+}
+button.primary {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.themeRow {
+  margin-bottom: 1em;
+  text-align: right;
+  font-size: 14px;
+}
+.note {
+  margin-top: 0.8em;
+  color: #555;
+  font-size: 0.88em;
+  line-height: 1.4;
+}
+body.dark .note {
+  color: #d1d5db;
+}
+.error {
+  color: #b00020;
+  font-weight: bold;
+  margin-top: 0.8em;
+  line-height: 1.4;
+}
+body.dark .error {
+  color: #fda4af;
+}
+.summaryRow {
+  margin-bottom: 0.55em;
+  line-height: 1.45;
+  font-size: 0.96em;
+}
+.lineItem {
+  padding: 0.7em 0.8em;
+  margin-bottom: 0.45em;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.35em;
+  background: #fafafa;
+  line-height: 1.45;
+  font-size: 0.96em;
+}
+body.dark .lineItem {
+  background: #111827;
+  border-color: #374151;
+}
+.adjustedNote {
+  color: #555;
+  font-size: 0.9em;
+}
+body.dark .adjustedNote {
+  color: #d1d5db;
+}
+.packageEntry {
+  padding: 0.8em;
+  margin-bottom: 0.7em;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.35em;
+  background: #fafafa;
+}
+body.dark .packageEntry {
+  background: #111827;
+  border-color: #374151;
+}
+.packageEntryTitle {
+  font-weight: bold;
+  margin-bottom: 0.65em;
+}
+.packageCheckRow {
+  margin-top: 0.55em;
+  font-size: 0.92em;
+}
+.packageCheckRow input {
+  width: auto;
+  margin-right: 0.4em;
+}
+.instructionsBox {
+  white-space: pre-line;
+  line-height: 1.45;
+  font-size: 0.94em;
+}
+</style>
+
+<script type="text/javascript" src="calculations.js"></script>
+<script type="text/javascript">
+function byId(id) { return document.getElementById(id); }
+function formatMoneyCents(cents) { return TCSCalculations.formatCents(cents); }
+function formatSignedCents(cents) { return cents > 0 ? "+" + formatMoneyCents(cents) : formatMoneyCents(cents); }
+function escapeHtml(value) {
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+function showPaymentError(message) {
+  byId("errorBox1").innerHTML = escapeHtml(message);
+  setPanelHeights();
+}
+function showRefundError(message) {
+  byId("errorBox2").innerHTML = escapeHtml(message);
+  setPanelHeights();
+}
+function showPartialRefundError(message) {
+  byId("errorBox3").innerHTML = escapeHtml(message);
+  setPanelHeights();
+}
+
+function getParticipantWidth() {
+  if (document.documentElement && document.documentElement.participantWidth) return document.documentElement.participantWidth;
+  if (document.body && document.body.participantWidth) return document.body.participantWidth;
+  return 900;
+}
+function getParticipantHeight() {
+  if (document.documentElement && document.documentElement.participantHeight) return document.documentElement.participantHeight;
+  if (document.body && document.body.participantHeight) return document.body.participantHeight;
+  return 700;
+}
+function getBaseFontPx() {
+  var size = 16;
+  if (document.body && document.body.currentStyle && document.body.currentStyle.fontSize) {
+    var raw = document.body.currentStyle.fontSize;
+    if (raw.indexOf("px") > -1) size = parseFloat(raw);
+  }
+  return size;
+}
+
+function showTab(tabName) {
+  byId("paymentsTab").className = "tabPane" + (tabName === "payments" ? " active" : "");
+  byId("refundTab").className = "tabPane" + (tabName === "refund" ? " active" : "");
+  byId("partialRefundTab").className = "tabPane" + (tabName === "partialRefund" ? " active" : "");
+  byId("paymentsTabBtn").className = "tabBtn" + (tabName === "payments" ? " active" : "");
+  byId("refundTabBtn").className = "tabBtn" + (tabName === "refund" ? " active" : "");
+  byId("partialRefundTabBtn").className = "tabBtn" + (tabName === "partialRefund" ? " active" : "");
+  setPanelHeights();
+}
+
+function setTheme() {
+  document.body.className = byId("darkMode").checked ? "dark" : "";
+  setPanelHeights();
+}
+
+function setPanelHeights() {
+  var width = getParticipantWidth();
+  var height = getParticipantHeight();
+  var fontPx = getBaseFontPx();
+
+  var groups = [
+    { left: "leftCol1", right: "rightCol1", summary: "summaryPanel1", results: "resultsPanel1", box: "resultsBox1" },
+    { left: "leftCol2", right: "rightCol2", summary: "summaryPanel2", results: "resultsPanel2", box: "resultsBox2" },
+    { left: "leftCol3", right: "rightCol3", summary: "summaryPanel3", results: "resultsPanel3", box: "resultsBox3" }
+  ];
+
+  for (var g = 0; g < groups.length; g++) {
+    var leftCol = byId(groups[g].left);
+    var rightCol = byId(groups[g].right);
+    var summaryPanel = byId(groups[g].summary);
+    var resultsPanel = byId(groups[g].results);
+    var resultsBox = byId(groups[g].box);
+    if (!leftCol) continue;
+
+    if (width < 760) {
+      leftCol.style.width = "100%";
+      rightCol.style.width = "100%";
+      rightCol.style.marginLeft = "0";
+      summaryPanel.style.minHeight = (fontPx * 8) + "px";
+      resultsPanel.style.minHeight = (fontPx * 10) + "px";
+      resultsBox.style.maxHeight = "";
+      resultsBox.style.overflowY = "visible";
+    } else {
+      leftCol.style.width = "49%";
+      rightCol.style.width = "49%";
+      rightCol.style.marginLeft = "2%";
+      summaryPanel.style.minHeight = Math.max(fontPx * 11, height * 0.24) + "px";
+      resultsPanel.style.minHeight = Math.max(fontPx * 16, height * 0.42) + "px";
+      resultsBox.style.maxHeight = Math.max(fontPx * 18, height * 0.46) + "px";
+      resultsBox.style.overflowY = "auto";
+    }
+  }
+}
+
+function getDepositAmount(packageCents) {
+  var depositType = byId("depositType").value;
+  var result;
+  if (depositType === "percent") {
+    result = TCSCalculations.getDepositCents(packageCents, { type: "percent", value: byId("depositPercent").value });
+    if (!result.ok) return result;
+    result.label = "Deposit percentage";
+    result.valueText = escapeHtml(byId("depositPercent").value) + "%";
+    return result;
+  }
+  result = TCSCalculations.parseMoneyCents(byId("depositAmount").value, "Deposit amount");
+  if (!result.ok) return result;
+  result = TCSCalculations.getDepositCents(packageCents, { type: "amount", cents: result.cents });
+  if (!result.ok) return result;
+  result.label = "Deposit amount";
+  result.valueText = formatMoneyCents(result.cents);
+  return result;
+}
+
+function updateDepositInputs() {
+  var depositType = byId("depositType").value;
+  byId("depositPercentWrap").style.display = depositType === "percent" ? "block" : "none";
+  byId("depositAmountWrap").style.display = depositType === "amount" ? "block" : "none";
+  calculatePayments();
+}
+
+function calculatePayments() {
+  var packageResult = TCSCalculations.parseMoneyCents(byId("packagePrice").value, "Package price");
+  var paymentCountResult = TCSCalculations.parseWholeNumber(byId("totalPayments").value, "Number of payments");
+  var firstMatches = byId("firstMatchesDeposit").value === "yes";
+  var depositInfo;
+  var validation;
+  var schedule;
+  var packageCents;
+  var depositCents;
+  var remainingCents;
+  var remainingCount;
+  var summaryHtml = "";
+  var resultsHtml = "";
+  var i;
+  var finalNote;
+  var totalCollectedCents;
+
+  byId("errorBox1").innerHTML = "";
+  byId("summaryBox1").innerHTML = "";
+  byId("resultsBox1").innerHTML = "";
+  if (!packageResult.ok) { showPaymentError(packageResult.message); return; }
+  if (!paymentCountResult.ok) { showPaymentError(paymentCountResult.message); return; }
+
+  packageCents = packageResult.cents;
+  depositInfo = getDepositAmount(packageCents);
+  if (!depositInfo.ok) { showPaymentError(depositInfo.message); return; }
+  depositCents = depositInfo.cents;
+  validation = TCSCalculations.validatePaymentScenario(packageCents, depositCents, paymentCountResult.value, firstMatches);
+  if (!validation.ok) { showPaymentError(validation.message); return; }
+
+  remainingCents = validation.remainingCents;
+  remainingCount = validation.remainingPayments;
+  schedule = remainingCount > 0 ? TCSCalculations.buildScheduleCents(remainingCents, remainingCount) : [];
+  totalCollectedCents = depositCents + (firstMatches ? depositCents : 0) + remainingCents;
+  resultsHtml += '<div class="lineItem"><strong>Deposit:</strong> ' + formatMoneyCents(depositCents) + '</div>';
+
+  if (firstMatches) {
+    resultsHtml += '<div class="lineItem"><strong>Payment 1:</strong> ' + formatMoneyCents(depositCents) + ' (matches deposit)</div>';
+    for (i = 0; i < schedule.length; i++) {
+      finalNote = (i === schedule.length - 1 && schedule[i] !== Math.floor(remainingCents / remainingCount)) ? ' <span class="adjustedNote">(final adjusted)</span>' : '';
+      resultsHtml += '<div class="lineItem"><strong>Payment ' + (i + 2) + ':</strong> ' + formatMoneyCents(schedule[i]) + finalNote + '</div>';
+    }
+    summaryHtml += '<div class="summaryRow"><strong>' + depositInfo.label + ':</strong> ' + depositInfo.valueText + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Deposit used:</strong> ' + formatMoneyCents(depositCents) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Payment 1 matches deposit:</strong> Yes</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining balance after deposit and Payment 1:</strong> ' + formatMoneyCents(remainingCents) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining payments after Payment 1:</strong> ' + remainingCount + '</div>';
+  } else {
+    for (i = 0; i < schedule.length; i++) {
+      finalNote = (i === schedule.length - 1 && schedule[i] !== Math.floor(remainingCents / remainingCount)) ? ' <span class="adjustedNote">(final adjusted)</span>' : '';
+      resultsHtml += '<div class="lineItem"><strong>Payment ' + (i + 1) + ':</strong> ' + formatMoneyCents(schedule[i]) + finalNote + '</div>';
+    }
+    summaryHtml += '<div class="summaryRow"><strong>' + depositInfo.label + ':</strong> ' + depositInfo.valueText + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Deposit used:</strong> ' + formatMoneyCents(depositCents) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Payment 1 matches deposit:</strong> No</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Remaining balance after deposit:</strong> ' + formatMoneyCents(remainingCents) + '</div>';
+    summaryHtml += '<div class="summaryRow"><strong>Number of payments:</strong> ' + paymentCountResult.value + '</div>';
+  }
+
+  summaryHtml += '<div class="summaryRow"><strong>Total collected/reconciled:</strong> ' + formatMoneyCents(totalCollectedCents) + ' of ' + formatMoneyCents(packageCents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Calculation rule:</strong> Monetary values use integer cents; any remainder is assigned to the final payment.</div>';
+  byId("summaryBox1").innerHTML = summaryHtml;
+  byId("resultsBox1").innerHTML = resultsHtml;
+  setPanelHeights();
+}
+
+function resetPayments() {
+  byId("packagePrice").value = "2500";
+  byId("depositType").value = "percent";
+  byId("depositPercent").value = "20";
+  byId("depositAmount").value = "500";
+  byId("totalPayments").value = "6";
+  byId("firstMatchesDeposit").value = "yes";
+  updateDepositInputs();
+}
+
+function calculateRefund() {
+  var totalCostResult = TCSCalculations.parseMoneyCents(byId("refundTotalCost").value, "Total package cost");
+  var amountPaidResult = TCSCalculations.parseMoneyCents(byId("refundAmountPaid").value, "Amount paid");
+  var tppResult = TCSCalculations.parseMoneyCents(byId("refundTpp").value, "TPP amount");
+  var calculation;
+  var now;
+  var stamp;
+  var summaryHtml = "";
+  var resultHtml = "";
+
+  byId("errorBox2").innerHTML = "";
+  byId("summaryBox2").innerHTML = "";
+  byId("resultsBox2").innerHTML = "";
+  if (!totalCostResult.ok) { showRefundError(totalCostResult.message); return; }
+  if (!amountPaidResult.ok) { showRefundError(amountPaidResult.message); return; }
+  if (!tppResult.ok) { showRefundError(tppResult.message); return; }
+
+  calculation = TCSCalculations.calculateRefundCents(totalCostResult.cents, amountPaidResult.cents, tppResult.cents);
+  if (!calculation.ok) { showRefundError(calculation.message); return; }
+
+  now = new Date();
+  stamp = now.getFullYear() + "-" + ("0" + (now.getMonth() + 1)).slice(-2) + "-" + ("0" + now.getDate()).slice(-2) + " " + ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2) + ":" + ("0" + now.getSeconds()).slice(-2);
+  summaryHtml += '<div class="summaryRow"><strong>Calculation time:</strong> ' + stamp + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Total Package Cost:</strong> ' + formatMoneyCents(totalCostResult.cents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Amount Paid:</strong> ' + formatMoneyCents(amountPaidResult.cents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>TPP:</strong> ' + formatMoneyCents(tppResult.cents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>20% of Package Cost:</strong> ' + formatMoneyCents(calculation.twentyPercentCents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Non-Refundable (TPP + 20%):</strong> ' + formatMoneyCents(calculation.nonRefundableCents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Policy:</strong> No refund without TPP; TPP and 20% of package cost are non-refundable.</div>';
+  resultHtml += '<div class="lineItem"><strong>Refund Due:</strong> ' + formatMoneyCents(calculation.refundCents) + '</div>';
+  if (calculation.refundCents === 0) resultHtml += '<div class="lineItem">No refund is due after applying the non-refundable amounts.</div>';
+  resultHtml += '<div class="lineItem"><strong>Formula used:</strong> Amount Paid - (TPP + 20% of Package Cost), minimum $0.00.</div>';
+  resultHtml += '<div class="lineItem"><strong>Reconciliation:</strong> Refund plus applied non-refundable amount equals ' + formatMoneyCents(calculation.refundCents + calculation.appliedNonRefundableCents) + ' of ' + formatMoneyCents(calculation.nonRefundableCents) + ' required.</div>';
+  byId("summaryBox2").innerHTML = summaryHtml;
+  byId("resultsBox2").innerHTML = resultHtml;
+  setPanelHeights();
+}
+
+function resetRefund() {
+  byId("refundTotalCost").value = "";
+  byId("refundAmountPaid").value = "";
+  byId("refundTpp").value = "";
+  byId("summaryBox2").innerHTML = "";
+  byId("resultsBox2").innerHTML = "";
+  byId("errorBox2").innerHTML = "";
+  setPanelHeights();
+}
+
+function updatePartialPackageInputs() {
+  var countResult = TCSCalculations.parseWholeNumber(byId("partialPackageCount").value, "Number of packages");
+  var count;
+  var wrap = byId("partialPackageInputs");
+  var html = "";
+  var i;
+
+  if (!countResult.ok) {
+    wrap.innerHTML = "";
+    showPartialRefundError(countResult.message);
+    byId("summaryBox3").innerHTML = "";
+    byId("resultsBox3").innerHTML = "";
+    return;
+  }
+  count = countResult.value;
+  if (count > 50) {
+    byId("partialPackageCount").value = "50";
+    count = 50;
+  }
+  byId("errorBox3").innerHTML = "";
+  for (i = 1; i <= count; i++) {
+    html += '<div class="packageEntry">';
+    html += '<div class="packageEntryTitle">Package ' + i + '</div>';
+    html += '<div class="field"><label for="partialPackagePrice' + i + '">Package Price</label>';
+    html += '<input id="partialPackagePrice' + i + '" type="text" value="" onkeyup="calculatePartialRefund()" /></div>';
+    html += '<div class="packageCheckRow"><label style="display:inline; font-weight:normal;">';
+    html += '<input id="partialPackageCancel' + i + '" type="checkbox" onclick="calculatePartialRefund()" /> Include this package in refund</label></div>';
+    html += '</div>';
+  }
+  wrap.innerHTML = html;
+  byId("summaryBox3").innerHTML = "";
+  byId("resultsBox3").innerHTML = "";
+  setPanelHeights();
+}
+
+function calculatePartialRefund() {
+  var countResult = TCSCalculations.parseWholeNumber(byId("partialPackageCount").value, "Number of packages");
+  var tppResult = TCSCalculations.parseMoneyCents(byId("partialTpp").value, "TPP per package");
+  var percentResult = TCSCalculations.parsePercentage(byId("partialNonRefundPercent").value, "Non-refundable percentage");
+  var amountPaidResult = TCSCalculations.parseMoneyCents(byId("partialAmountPaid").value, "Amount paid");
+  var pricesCents = [];
+  var selected = [];
+  var calculation;
+  var summaryHtml = "";
+  var resultHtml = "";
+  var totalSelectedRefund = 0;
+  var selectedCount = 0;
+  var i;
+  var priceResult;
+  var item;
+
+  byId("errorBox3").innerHTML = "";
+  byId("summaryBox3").innerHTML = "";
+  byId("resultsBox3").innerHTML = "";
+  if (!countResult.ok) { showPartialRefundError(countResult.message); return; }
+  if (!tppResult.ok) { showPartialRefundError(tppResult.message); return; }
+  if (!percentResult.ok) { showPartialRefundError(percentResult.message); return; }
+  if (!amountPaidResult.ok) { showPartialRefundError(amountPaidResult.message); return; }
+
+  for (i = 1; i <= countResult.value; i++) {
+    priceResult = TCSCalculations.parseMoneyCents(byId("partialPackagePrice" + i).value, "Package " + i + " price");
+    if (!priceResult.ok) { showPartialRefundError(priceResult.message); return; }
+    pricesCents.push(priceResult.cents);
+    selected.push(byId("partialPackageCancel" + i).checked === true);
+  }
+
+  calculation = TCSCalculations.calculatePartialRefundCents({
+    pricesCents: pricesCents,
+    tppEachCents: tppResult.cents,
+    nonRefundPercent: percentResult.value,
+    amountPaidCents: amountPaidResult.cents,
+    selected: selected
+  });
+  if (!calculation.ok) { showPartialRefundError(calculation.message); return; }
+
+  summaryHtml += '<div class="summaryRow"><strong>Number of Packages:</strong> ' + countResult.value + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Total Package Price:</strong> ' + formatMoneyCents(calculation.totalPackageCents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>TPP Per Package:</strong> ' + formatMoneyCents(tppResult.cents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Total TPP:</strong> ' + formatMoneyCents(calculation.totalTppCents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Amount Paid:</strong> ' + formatMoneyCents(amountPaidResult.cents) + '</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Non-Refundable Percentage:</strong> ' + escapeHtml(byId("partialNonRefundPercent").value) + '% per package</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Payment Allocation:</strong> TPP first, then the remaining paid amount proportionally by package price.</div>';
+  summaryHtml += '<div class="summaryRow"><strong>Calculation rule:</strong> All monetary values use integer cents; allocation remainders are assigned deterministically.</div>';
+
+  for (i = 0; i < calculation.results.length; i++) {
+    item = calculation.results[i];
+    if (!item.selected) continue;
+    resultHtml += '<div class="lineItem">';
+    resultHtml += '<strong>Package ' + (i + 1) + '</strong><br />';
+    resultHtml += 'Package Price: ' + formatMoneyCents(item.packageCents) + '<br />';
+    resultHtml += 'Estimated Paid Toward Package: ' + formatMoneyCents(item.allocatedPaidCents) + '<br />';
+    resultHtml += 'TPP Non-Refundable: ' + formatMoneyCents(tppResult.cents) + '<br />';
+    resultHtml += escapeHtml(byId("partialNonRefundPercent").value) + '% Non-Refundable: ' + formatMoneyCents(item.percentNonRefundableCents) + '<br />';
+    resultHtml += 'Total Non-Refundable: ' + formatMoneyCents(item.nonRefundableCents) + '<br />';
+    resultHtml += '<strong>Refund Due: ' + formatMoneyCents(item.refundCents) + '</strong><br />';
+    resultHtml += '<span class="adjustedNote">Math: ' + formatMoneyCents(item.allocatedPaidCents) + ' - (' + formatMoneyCents(tppResult.cents) + ' + ' + formatMoneyCents(item.percentNonRefundableCents) + ') = ' + formatMoneyCents(item.refundCents) + '</span>';
+    resultHtml += '</div>';
+    totalSelectedRefund += item.refundCents;
+    selectedCount++;
+  }
+
+  if (selectedCount === 0) {
+    resultHtml = '<div class="lineItem">Check the package you want to refund to see its result.</div>';
+  } else {
+    resultHtml += '<div class="lineItem"><strong>Total Refund Due: ' + formatMoneyCents(totalSelectedRefund) + '</strong></div>';
+    resultHtml += '<div class="lineItem">Only the checked package(s) are included in this refund total.</div>';
+  }
+
+  byId("summaryBox3").innerHTML = summaryHtml;
+  byId("resultsBox3").innerHTML = resultHtml;
+  setPanelHeights();
+}
+
+function resetPartialRefund() {
+  byId("partialPackageCount").value = "5";
+  byId("partialTpp").value = "481";
+  byId("partialNonRefundPercent").value = "20";
+  byId("partialAmountPaid").value = "";
+  byId("errorBox3").innerHTML = "";
+  byId("summaryBox3").innerHTML = "";
+  byId("resultsBox3").innerHTML = "";
+  updatePartialPackageInputs();
+}
+
+function initApp() {
+  setTheme();
+  showTab("payments");
+  updateDepositInputs();
+  updatePartialPackageInputs();
+  setPanelHeights();
+}
+window.onload = initApp;
+window.onresize = function() { setPanelHeights(); };
+</script>
+</head>
+
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="themeRow">
+        <label style="display:inline; font-weight:normal;">
+          <input id="darkMode" type="checkbox" onclick="setTheme()" style="width:auto; margin-right:6px;" />
+          Dark mode
+        </label>
+      </div>
+      <h1>Travel Calculator Suite</h1>
+    </div>
+
+    <div class="tabs">
+      <button id="paymentsTabBtn" class="tabBtn active" onclick="showTab('payments')">Payment Calculator</button>
+      <button id="refundTabBtn" class="tabBtn" onclick="showTab('refund')">Refund Calculator</button>
+      <button id="partialRefundTabBtn" class="tabBtn" onclick="showTab('partialRefund')">Partial Package Refunds</button>
+    </div>
+
+    <div id="paymentsTab" class="tabPane active">
+      <div class="layout">
+        <div class="col" id="leftCol1">
+          <div class="panel">
+            <div class="field">
+              <label for="packagePrice">Package Price</label>
+              <input id="packagePrice" type="text" value="2500" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="depositType">Deposit Type</label>
+              <select id="depositType" onchange="updateDepositInputs()">
+                <option value="percent" selected="selected">Percentage</option>
+                <option value="amount">Dollar Amount</option>
+              </select>
+            </div>
+            <div class="field" id="depositPercentWrap">
+              <label for="depositPercent">Custom Deposit Percentage</label>
+              <input id="depositPercent" type="text" value="20" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field" id="depositAmountWrap" style="display:none;">
+              <label for="depositAmount">Custom Deposit Dollar Amount</label>
+              <input id="depositAmount" type="text" value="500" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="totalPayments">Total Number of Payments</label>
+              <input id="totalPayments" type="text" value="6" onkeyup="calculatePayments()" />
+            </div>
+            <div class="field">
+              <label for="firstMatchesDeposit">Does Payment 1 Match the Deposit?</label>
+              <select id="firstMatchesDeposit" onchange="calculatePayments()">
+                <option value="yes" selected="selected">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+            <button class="primary" onclick="calculatePayments()">Calculate</button>
+            <button onclick="resetPayments()">Reset</button>
+            <div class="error" id="errorBox1"></div>
+            <div class="note">Use either a percentage-based deposit or a fixed dollar deposit.</div>
+          </div>
+        </div>
+        <div class="col colRight" id="rightCol1">
+          <div class="panel" id="summaryPanel1">
+            <h2>Summary</h2>
+            <div id="summaryBox1"></div>
+          </div>
+          <div class="panel" id="resultsPanel1">
+            <h2>Payment Breakdown</h2>
+            <div id="resultsBox1"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="refundTab" class="tabPane">
+      <div class="layout">
+        <div class="col" id="leftCol2">
+          <div class="panel">
+            <div class="field">
+              <label for="refundTotalCost">Total Package Cost</label>
+              <input id="refundTotalCost" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <div class="field">
+              <label for="refundAmountPaid">Amount Participant Paid</label>
+              <input id="refundAmountPaid" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <div class="field">
+              <label for="refundTpp">TPP Amount</label>
+              <input id="refundTpp" type="text" value="" onkeyup="calculateRefund()" />
+            </div>
+            <button class="primary" onclick="calculateRefund()">Calculate</button>
+            <button onclick="resetRefund()">Clear</button>
+            <div class="error" id="errorBox2"></div>
+            <div class="note">Non-refundable is calculated as TPP + 20% of Total Package Cost.</div>
+          </div>
+
+          <div class="panel">
+            <h2>Instructions</h2>
+            <div class="instructionsBox">
+Step 1: Total Package Cost
+- Enter the cost of occupancy packages only
+- Do NOT include TPP in this total
+- If there are multiple packages, add them together first
+
+Step 2: Amount Paid
+- Go to the Transaction Summary
+- Locate the line labeled "Amount Paid"
+- Enter that amount
+
+Step 3: TPP Cost
+- Enter the total cost of the Trip Protection Plan
+- If there are multiple TPPs, add them together before entering
+
+Step 4: Calculate
+- Click the "Calculate" button
+- The refund amount will appear at the bottom
+            </div>
+          </div>
+        </div>
+
+        <div class="col colRight" id="rightCol2">
+          <div class="panel" id="summaryPanel2">
+            <h2>Summary</h2>
+            <div id="summaryBox2"></div>
+          </div>
+          <div class="panel" id="resultsPanel2">
+            <h2>Refund Result</h2>
+            <div id="resultsBox2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="partialRefundTab" class="tabPane">
+      <div class="layout">
+        <div class="col" id="leftCol3">
+          <div class="panel">
+            <div class="field">
+              <label for="partialPackageCount">Number of Packages</label>
+              <input id="partialPackageCount" type="text" value="5" onkeyup="updatePartialPackageInputs()" />
+            </div>
+            <div class="field">
+              <label for="partialTpp">TPP Amount Per Package</label>
+              <input id="partialTpp" type="text" value="481" onkeyup="calculatePartialRefund()" />
+            </div>
+            <div class="field">
+              <label for="partialNonRefundPercent">Non-Refundable Percentage Per Package</label>
+              <input id="partialNonRefundPercent" type="text" value="20" onkeyup="calculatePartialRefund()" />
+            </div>
+            <div class="field">
+              <label for="partialAmountPaid">Total Amount Paid on Receipt</label>
+              <input id="partialAmountPaid" type="text" value="" onkeyup="calculatePartialRefund()" />
+            </div>
+            <div id="partialPackageInputs"></div>
+            <button class="primary" onclick="calculatePartialRefund()">Calculate</button>
+            <button onclick="resetPartialRefund()">Clear</button>
+            <div class="error" id="errorBox3"></div>
+            <div class="note">The non-refundable percentage is calculated separately from each package's own price. TPP is non-refundable per package.</div>
+          </div>
+
+          <div class="panel">
+            <h2>Instructions</h2>
+            <div class="instructionsBox">
+Step 1: Number of Packages
+- Enter how many packages are on the booking
+- A box will appear for each package
+
+Step 2: TPP and Non-Refundable Percentage
+- Enter the TPP amount for one package
+- Enter the non-refundable percentage
+- The percentage is applied separately to each package price
+
+Step 3: Amount Paid
+- Enter the total Amount Paid shown on the receipt
+
+Step 4: Package Prices
+- Enter each package's price without TPP
+- Check the package or packages being removed
+
+Step 5: Calculate
+- The calculator estimates how much of the total payment belongs to each package
+- It subtracts that package's TPP and non-refundable percentage
+- Only checked package results are shown
+- If more than one package is checked, their refunds are added together at the bottom
+            </div>
+          </div>
+        </div>
+
+        <div class="col colRight" id="rightCol3">
+          <div class="panel" id="summaryPanel3">
+            <h2>Summary</h2>
+            <div id="summaryBox3"></div>
+          </div>
+          <div class="panel" id="resultsPanel3">
+            <h2>Partial Refund Results</h2>
+            <div id="resultsBox3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
