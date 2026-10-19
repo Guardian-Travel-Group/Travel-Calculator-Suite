@@ -232,6 +232,28 @@ body.dark .packageEntry {
   line-height: 1.45;
   font-size: 0.94em;
 }
+
+/* Responsive layout for narrow HTA windows and monitor scaling. */
+@media screen and (max-width: 760px) {
+  .app { padding: 0.75em; }
+  .col {
+    display: block;
+    width: 100% !important;
+  }
+  .colRight {
+    margin-left: 0 !important;
+  }
+  .tabs { margin: 0.75em 0; }
+  .tabBtn, button {
+    max-width: 100%;
+    white-space: normal;
+  }
+}
+
+@media screen and (min-width: 761px) {
+  .layout { display: block; }
+  .col { display: inline-block; }
+}
 </style>
 
 <script type="text/javascript">
@@ -289,11 +311,15 @@ function buildFinalAdjustedSchedule(balance, paymentCount) {
 function getParticipantWidth() {
   if (document.documentElement && document.documentElement.participantWidth) return document.documentElement.participantWidth;
   if (document.body && document.body.participantWidth) return document.body.participantWidth;
+  if (document.documentElement && document.documentElement.clientWidth) return document.documentElement.clientWidth;
+  if (document.body && document.body.clientWidth) return document.body.clientWidth;
   return 900;
 }
 function getParticipantHeight() {
   if (document.documentElement && document.documentElement.participantHeight) return document.documentElement.participantHeight;
   if (document.body && document.body.participantHeight) return document.body.participantHeight;
+  if (document.documentElement && document.documentElement.clientHeight) return document.documentElement.clientHeight;
+  if (document.body && document.body.clientHeight) return document.body.clientHeight;
   return 700;
 }
 function getBaseFontPx() {
@@ -323,6 +349,8 @@ function setTheme() {
 function setPanelHeights() {
   var width = getParticipantWidth();
   var height = getParticipantHeight();
+  var responsiveFontPx = Math.max(13, Math.min(18, Math.round(width / 60)));
+  document.body.style.fontSize = responsiveFontPx + "px";
   var fontPx = getBaseFontPx();
 
   var groups = [
@@ -339,7 +367,7 @@ function setPanelHeights() {
     var resultsBox = byId(groups[g].box);
     if (!leftCol) continue;
 
-    if (width < 760) {
+    if (width <= 760) {
       leftCol.style.width = "100%";
       rightCol.style.width = "100%";
       rightCol.style.marginLeft = "0";
