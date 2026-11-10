@@ -1,360 +1,75 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<!--
+  Redirect stub. The real application is Webapp.html.
+
+  WHY BOTH FILES EXIST
+  index.html is the default document every static host serves at the root URL
+  (Wix, Netlify, S3, IIS, an internal file share). Webapp.html is named so a
+  non-technical reviewer opening the folder knows which file to double-click.
+  Keeping this stub means the hosted root URL still loads the app instead of
+  showing a directory listing or a 404.
+
+  No JavaScript: the meta refresh below does the work, and the link is the
+  fallback if a browser or policy ignores it. Paths are relative, so this
+  works from file:// and from any subdirectory on a server.
+-->
+<meta http-equiv="refresh" content="0; url=Webapp.html" />
+<link rel="canonical" href="Webapp.html" />
 <title>Travel Calculator Suite</title>
-<meta name="description" content="Payment schedules, refunds and partial package refunds for Guardian Travel Group bookings." />
-<meta name="color-scheme" content="light dark" />
-<meta name="robots" content="noindex, nofollow" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231d4ed8'/%3E%3Ctext x='16' y='22' font-family='Arial,sans-serif' font-size='16' font-weight='bold' fill='white' text-anchor='middle'%3ETC%3C/text%3E%3C/svg%3E" />
-<link rel="stylesheet" href="assets/css/styles.css" />
+
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #f4f6fb;
+    color: #1f2937;
+    text-align: center;
+    padding: 24px;
+  }
+  .box {
+    max-width: 30rem;
+  }
+  h1 {
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem;
+  }
+  p {
+    margin: 0 0 1.25rem;
+    line-height: 1.5;
+  }
+  a.go {
+    display: inline-block;
+    padding: 0.7rem 1.4rem;
+    background: #1d4ed8;
+    color: #fff;
+    text-decoration: none;
+    border-radius: 7px;
+    font-weight: 600;
+  }
+  a.go:hover,
+  a.go:focus {
+    background: #1740b5;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111827; color: #e5e7eb; }
+    a.go { background: #3b63e0; }
+  }
+</style>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to calculator</a>
-
-<header class="site-header">
-  <div class="site-header__inner">
-    <div class="brand">
-      <div class="brand__mark" aria-hidden="true">TCS</div>
-      <div class="brand__text">
-        <div class="brand__title">Travel Calculator Suite</div>
-        <div class="brand__sub">Guardian Travel Group</div>
-      </div>
-    </div>
-    <div class="site-header__actions">
-      <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false">
-        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32 1.41-1.41"/></svg>
-        <span id="themeToggleLabel">Dark mode</span>
-      </button>
-    </div>
+  <div class="box">
+    <h1>Travel Calculator Suite</h1>
+    <p>Opening the calculator&hellip; if nothing happens, use the button below.</p>
+    <p><a class="go" href="Webapp.html">Open Travel Calculator Suite</a></p>
   </div>
-</header>
-
-<nav class="tabs-bar" aria-label="Calculators">
-  <div class="tablist" role="tablist">
-    <button type="button" class="tab" role="tab" id="tab-payments" aria-controls="panel-payments" aria-selected="true">Payment Calculator</button>
-    <button type="button" class="tab" role="tab" id="tab-refund" aria-controls="panel-refund" aria-selected="false" tabindex="-1">Refund Calculator</button>
-    <button type="button" class="tab" role="tab" id="tab-partial" aria-controls="panel-partial" aria-selected="false" tabindex="-1">Partial Package Refunds</button>
-  </div>
-</nav>
-
-<main id="main">
-
-  <!-- ============ PAYMENT CALCULATOR ============ -->
-  <section class="tabpanel" role="tabpanel" id="panel-payments" aria-labelledby="tab-payments" tabindex="0">
-    <div class="pane-head">
-      <h2>Payment Calculator</h2>
-      <p>Build an even payment schedule from a package price and deposit. Rounding is absorbed by the final payment so the schedule always totals the balance exactly.</p>
-    </div>
-
-    <div class="grid">
-      <div class="stack">
-        <div class="card">
-          <div class="card__head"><h3>Booking details</h3></div>
-          <div class="card__body">
-            <div class="field">
-              <label for="packagePrice">Package Price</label>
-              <div class="input-money">
-                <input id="packagePrice" type="text" inputmode="decimal" autocomplete="off" value="2500" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="depositType">Deposit Type</label>
-              <select id="depositType">
-                <option value="percent" selected>Percentage</option>
-                <option value="amount">Dollar Amount</option>
-              </select>
-            </div>
-
-            <div class="field" id="depositPercentWrap">
-              <label for="depositPercent">Custom Deposit Percentage</label>
-              <input id="depositPercent" type="text" inputmode="decimal" autocomplete="off" value="20" />
-              <span class="field__hint">Percent of the package price.</span>
-            </div>
-
-            <div class="field" id="depositAmountWrap" hidden>
-              <label for="depositAmount">Custom Deposit Dollar Amount</label>
-              <div class="input-money">
-                <input id="depositAmount" type="text" inputmode="decimal" autocomplete="off" value="500" />
-              </div>
-              <span class="field__hint">Rounded to the nearest dollar.</span>
-            </div>
-
-            <div class="field">
-              <label for="totalPayments">Total Number of Payments</label>
-              <input id="totalPayments" type="text" inputmode="numeric" autocomplete="off" value="6" />
-            </div>
-
-            <div class="field">
-              <label for="firstMatchesDeposit">Does Payment 1 Match the Deposit?</label>
-              <select id="firstMatchesDeposit">
-                <option value="yes" selected>Yes</option>
-                <option value="no">No</option>
-              </select>
-            </div>
-
-            <div class="actions">
-              <button type="button" class="btn btn--primary" id="btnCalcPayments">Calculate</button>
-              <button type="button" class="btn" id="btnResetPayments">Reset</button>
-            </div>
-
-            <div class="error" id="errorBox1" role="alert" aria-live="assertive"></div>
-            <p class="note">Use either a percentage-based deposit or a fixed dollar deposit.</p>
-          </div>
-        </div>
-      </div>
-
-      <div class="stack">
-        <div class="card card--accent">
-          <div class="card__head"><h3>Summary</h3></div>
-          <div class="card__body">
-            <dl class="summary-list" id="summaryBox1" aria-live="polite"></dl>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card__head"><h3>Payment Breakdown</h3></div>
-          <div class="card__body">
-            <div class="results" id="resultsBox1" aria-live="polite"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ REFUND CALCULATOR ============ -->
-  <section class="tabpanel" role="tabpanel" id="panel-refund" aria-labelledby="tab-refund" tabindex="0" hidden>
-    <div class="pane-head">
-      <h2>Refund Calculator</h2>
-      <p>Single-package refund. Non-refundable is TPP plus 20% of the total package cost.</p>
-    </div>
-
-    <div class="grid">
-      <div class="stack">
-        <div class="card">
-          <div class="card__head"><h3>Receipt details</h3></div>
-          <div class="card__body">
-            <div class="field">
-              <label for="refundTotalCost">Total Package Cost</label>
-              <div class="input-money">
-                <input id="refundTotalCost" type="text" inputmode="decimal" autocomplete="off" value="" />
-              </div>
-              <span class="field__hint">Occupancy packages only. Do not include TPP.</span>
-            </div>
-
-            <div class="field">
-              <label for="refundAmountPaid">Amount Participant Paid</label>
-              <div class="input-money">
-                <input id="refundAmountPaid" type="text" inputmode="decimal" autocomplete="off" value="" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="refundTpp">TPP Amount</label>
-              <div class="input-money">
-                <input id="refundTpp" type="text" inputmode="decimal" autocomplete="off" value="" />
-              </div>
-            </div>
-
-            <div class="actions">
-              <button type="button" class="btn btn--primary" id="btnCalcRefund">Calculate</button>
-              <button type="button" class="btn" id="btnResetRefund">Clear</button>
-            </div>
-
-            <div class="error" id="errorBox2" role="alert" aria-live="assertive"></div>
-            <p class="note">Non-refundable is calculated as TPP + 20% of Total Package Cost.</p>
-          </div>
-        </div>
-
-        <div class="card">
-          <details class="disclosure" open>
-            <summary>Instructions</summary>
-            <div class="card__body instructions">
-              <ol>
-                <li>
-                  <h4>Total Package Cost</h4>
-                  <ul>
-                    <li>Enter the cost of occupancy packages only</li>
-                    <li>Do NOT include TPP in this total</li>
-                    <li>If there are multiple packages, add them together first</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>Amount Paid</h4>
-                  <ul>
-                    <li>Go to the Transaction Summary</li>
-                    <li>Locate the line labeled &quot;Amount Paid&quot;</li>
-                    <li>Enter that amount</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>TPP Cost</h4>
-                  <ul>
-                    <li>Enter the total cost of the Trip Protection Plan</li>
-                    <li>If there are multiple TPPs, add them together before entering</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>Calculate</h4>
-                  <ul>
-                    <li>Click the &quot;Calculate&quot; button</li>
-                    <li>The refund amount will appear in the Refund Result panel</li>
-                  </ul>
-                </li>
-              </ol>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <div class="stack">
-        <div class="card card--accent">
-          <div class="card__head"><h3>Summary</h3></div>
-          <div class="card__body">
-            <dl class="summary-list" id="summaryBox2" aria-live="polite"></dl>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card__head"><h3>Refund Result</h3></div>
-          <div class="card__body">
-            <div class="results" id="resultsBox2" aria-live="polite"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PARTIAL PACKAGE REFUNDS ============ -->
-  <section class="tabpanel" role="tabpanel" id="panel-partial" aria-labelledby="tab-partial" tabindex="0" hidden>
-    <div class="pane-head">
-      <h2>Partial Package Refunds</h2>
-      <p>Multi-package receipt. TPP is treated as paid first, then the remaining payment is split across packages in proportion to their price.</p>
-    </div>
-
-    <div class="grid">
-      <div class="stack">
-        <div class="card">
-          <div class="card__head"><h3>Receipt details</h3></div>
-          <div class="card__body">
-            <div class="field">
-              <label for="partialPackageCount">Number of Packages</label>
-              <input id="partialPackageCount" type="text" inputmode="numeric" autocomplete="off" value="5" />
-              <span class="field__hint">Maximum 50.</span>
-            </div>
-
-            <div class="field">
-              <label for="partialTpp">TPP Amount Per Package</label>
-              <div class="input-money">
-                <input id="partialTpp" type="text" inputmode="decimal" autocomplete="off" value="481" />
-              </div>
-            </div>
-
-            <div class="field">
-              <label for="partialNonRefundPercent">Non-Refundable Percentage Per Package</label>
-              <input id="partialNonRefundPercent" type="text" inputmode="decimal" autocomplete="off" value="20" />
-            </div>
-
-            <div class="field">
-              <label for="partialAmountPaid">Total Amount Paid on Receipt</label>
-              <div class="input-money">
-                <input id="partialAmountPaid" type="text" inputmode="decimal" autocomplete="off" value="" />
-              </div>
-            </div>
-
-            <div class="actions">
-              <button type="button" class="btn btn--primary" id="btnCalcPartial">Calculate</button>
-              <button type="button" class="btn" id="btnResetPartial">Clear</button>
-            </div>
-
-            <div class="error" id="errorBox3" role="alert" aria-live="assertive"></div>
-            <p class="note">The non-refundable percentage is calculated separately from each package&#39;s own price. TPP is non-refundable per package.</p>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card__head"><h3>Package prices</h3></div>
-          <div class="card__body">
-            <div class="pkg-list" id="partialPackageInputs"></div>
-          </div>
-        </div>
-
-        <div class="card">
-          <details class="disclosure" open>
-            <summary>Instructions</summary>
-            <div class="card__body instructions">
-              <ol>
-                <li>
-                  <h4>Number of Packages</h4>
-                  <ul>
-                    <li>Enter how many packages are on the booking</li>
-                    <li>A box will appear for each package</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>TPP and Non-Refundable Percentage</h4>
-                  <ul>
-                    <li>Enter the TPP amount for one package</li>
-                    <li>Enter the non-refundable percentage</li>
-                    <li>The percentage is applied separately to each package price</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>Amount Paid</h4>
-                  <ul>
-                    <li>Enter the total Amount Paid shown on the receipt</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>Package Prices</h4>
-                  <ul>
-                    <li>Enter each package&#39;s price without TPP</li>
-                    <li>Check the package or packages being removed</li>
-                  </ul>
-                </li>
-                <li>
-                  <h4>Calculate</h4>
-                  <ul>
-                    <li>The calculator estimates how much of the total payment belongs to each package</li>
-                    <li>It subtracts that package&#39;s TPP and non-refundable percentage</li>
-                    <li>Only checked package results are shown</li>
-                    <li>If more than one package is checked, their refunds are added together at the bottom</li>
-                  </ul>
-                </li>
-              </ol>
-            </div>
-          </details>
-        </div>
-      </div>
-
-      <div class="stack">
-        <div class="card card--accent">
-          <div class="card__head"><h3>Summary</h3></div>
-          <div class="card__body">
-            <dl class="summary-list" id="summaryBox3" aria-live="polite"></dl>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card__head"><h3>Partial Refund Results</h3></div>
-          <div class="card__body">
-            <div class="results" id="resultsBox3" aria-live="polite"></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<footer class="site-footer">
-  <div class="site-footer__inner">
-    <span>Travel Calculator Suite &middot; web build</span>
-    <span>Internal use only &middot; Guardian Travel Group</span>
-  </div>
-</footer>
-
-<script src="assets/js/calc.js"></script>
-<script src="assets/js/app.js"></script>
 </body>
 </html>

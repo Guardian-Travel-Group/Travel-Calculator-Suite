@@ -14,7 +14,12 @@ builds — and is otherwise unaltered. See "Bounded counts" below.
 
 It is a static site. No server, no build step, no dependencies.
 
-**Locally:** open `web/index.html` in a browser.
+**Locally:** open `web/Webapp.html` in a browser (double-click it).
+
+**Hosted:** serve the `web/` directory. `index.html` is a small redirect to
+`Webapp.html`, so the root URL loads the app on any static host (Wix, Netlify,
+S3, IIS, an internal share) rather than showing a directory listing. It uses a
+meta refresh plus a plain link, so it works with JavaScript disabled.
 
 **Served (recommended for staff):** publish the contents of `web/` to any static
 host — SharePoint, IIS, nginx, S3, Netlify, GitHub Pages, a file share. Nothing
@@ -30,7 +35,8 @@ python3 -m http.server 8080    # from inside web/, for a quick local check
 
 ```
 web/
-  index.html              markup, three tab panels, Instructions panels
+  Webapp.html             THE APP — markup, three tab panels, Instructions
+  index.html              redirect stub so hosted root URLs still work
   assets/css/styles.css   design tokens, responsive layout, light/dark themes
   assets/js/calc.js       PORTED CALCULATION CORE — pure, no DOM
   assets/js/app.js        UI layer only: reads inputs, renders results
