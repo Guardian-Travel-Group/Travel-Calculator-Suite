@@ -810,16 +810,35 @@ console.log('Travel Calculator Suite - web port parity suite');
 console.log('HTA under test: ' + HTA_PATH);
 console.log('');
 
+/* Failure detail is bounded. A single mismatch can carry multi-kilobyte HTML,
+   and a broad fault produces dozens of them; left unbounded the report ran to
+   ~400KB, which (combined with process.exit below) could truncate the summary
+   lines when stdout is a pipe. Keep the detail useful but finite. */
+var MAX_FAILURES_SHOWN = 25;
+var MAX_VALUE_CHARS = 300;
+
+function clip(s) {
+  s = String(s);
+  return s.length > MAX_VALUE_CHARS
+    ? s.slice(0, MAX_VALUE_CHARS) + '... [' + s.length + ' chars total]'
+    : s;
+}
+
 if (failures.length) {
-  failures.forEach(function (f) {
+  failures.slice(0, MAX_FAILURES_SHOWN).forEach(function (f) {
     console.log('FAIL [' + f.kind + '] ' + f.name);
     f.mismatches.forEach(function (m) {
       console.log('   field: ' + m.field);
-      console.log('     HTA : ' + m.hta);
-      console.log('     PORT: ' + m.port);
+      console.log('     HTA : ' + clip(m.hta));
+      console.log('     PORT: ' + clip(m.port));
     });
     console.log('');
   });
+  if (failures.length > MAX_FAILURES_SHOWN) {
+    console.log('... and ' + (failures.length - MAX_FAILURES_SHOWN) +
+                ' more failing scenarios (detail suppressed)');
+    console.log('');
+  }
 }
 
 console.log('scenarios compared against live HTA code: ' + (passed + failed - unitPassed));
@@ -828,9 +847,14 @@ console.log('PASSED: ' + passed);
 console.log('FAILED: ' + failed);
 console.log('');
 
+/* Set exitCode rather than calling process.exit(), so queued stdout writes
+   flush before the process ends. process.exit() discards pending async writes
+   when stdout is a pipe, which silently truncated this report under a parent
+   process that captures output. */
 if (failed > 0) {
   console.log('RESULT: PARITY BROKEN');
-  process.exit(1);
+  process.exitCode = 1;
+} else {
+  console.log('RESULT: byte-identical parity with the HTA across all scenarios');
+  process.exitCode = 0;
 }
-console.log('RESULT: byte-identical parity with the HTA across all scenarios');
-process.exit(0);
