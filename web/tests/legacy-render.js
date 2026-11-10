@@ -20,14 +20,22 @@ function summaryRows(rows) {
 /* [HTA 466-500] */
 function renderPayments(raw) {
   var res = TCSCalc.computePayments(raw);
-  if (!res.ok) return { error: res.error, summary: '', results: '' };
+  if (!res.ok) {
+    return { error: res.error, summary: '', results: '', totalPaymentsField: String(raw.totalPayments) };
+  }
 
   var results = res.lines.map(function (line) {
     var note = line.adjusted ? ' <span class="adjustedNote">(final adjusted)</span>' : '';
     return '<div class="lineItem"><strong>' + line.label + ':</strong> ' + formatMoney(line.amount) + note + '</div>';
   }).join('');
 
-  return { error: '', summary: summaryRows(res.summary), results: results };
+  /* The HTA writes a clamped count back into the field; replicate that here so
+     the comparison covers the visible side effect, not just the numbers. */
+  var field = (res.clampedPaymentCount !== null && res.clampedPaymentCount !== undefined)
+    ? String(res.clampedPaymentCount)
+    : String(raw.totalPayments);
+
+  return { error: '', summary: summaryRows(res.summary), results: results, totalPaymentsField: field };
 }
 
 /* [HTA 568-573] */
@@ -48,7 +56,13 @@ function renderRefund(raw, now) {
 /* [HTA 721-746] */
 function renderPartialRefund(raw) {
   var res = TCSCalc.computePartialRefund(raw);
-  if (!res.ok) return { error: res.error, summary: '', results: '' };
+  if (!res.ok) {
+    return { error: res.error, summary: '', results: '', packageCountField: String(raw.packageCount) };
+  }
+
+  var field = (res.clampedPackageCount !== null && res.clampedPackageCount !== undefined)
+    ? String(res.clampedPackageCount)
+    : String(raw.packageCount);
 
   var results = '';
   res.packages.forEach(function (pkg) {
@@ -71,7 +85,7 @@ function renderPartialRefund(raw) {
     results += '<div class="lineItem"><strong>Total Refund Due: ' + formatMoney(res.totalSelectedRefund) + '</strong></div>';
   }
 
-  return { error: '', summary: summaryRows(res.summary), results: results };
+  return { error: '', summary: summaryRows(res.summary), results: results, packageCountField: field };
 }
 
 module.exports = {

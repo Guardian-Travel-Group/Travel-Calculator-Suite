@@ -40,16 +40,34 @@
    * Shared helpers - ported verbatim from [HTA 260-309]
    * -------------------------------------------------------------------- */
 
-  /* [HTA 261] */
+  /* [HTA 262-268]
+     Upper bounds on user-supplied counts that drive loops and array
+     allocation. Without these, a pasted or fat-fingered count hangs or
+     crashes the app: 999999999 payments exhausts memory, and a non-finite
+     count loops forever. MAX_PAYMENTS is 120 (10 years of monthly payments),
+     far beyond any real travel package. MAX_PACKAGES keeps the pre-existing
+     50-package ceiling. Both thresholds and the clamp-vs-error behaviour are
+     identical to the HTA so parity stays meaningful. */
+  var MAX_PAYMENTS = 120;
+  var MAX_PACKAGES = 50;
+
+  /* [HTA 270-273]
+     isNaN() alone does not reject Infinity, so every numeric field is checked
+     with this before it reaches arithmetic, a loop, or an array allocation. */
+  function isFiniteNumber(value) {
+    return typeof value === "number" && isFinite(value);
+  }
+
+  /* [HTA 275] */
   function roundToDollar(value) { return Math.round(value); }
 
-  /* [HTA 262] */
+  /* [HTA 276] */
   function roundMoney(value) { return Math.round(value * 100) / 100; }
 
-  /* [HTA 263] */
+  /* [HTA 277] */
   function formatMoney(value) { return "$" + roundMoney(value).toFixed(2); }
 
-  /* [HTA 265-274]
+  /* [HTA 279-288]
      Accept common currency entry styles without losing the decimal point.
      Examples: 4923.00, 4,923.00, $4,923.00 */
   function parseMoney(value) {
@@ -80,13 +98,19 @@
   /* [HTA 285] */
   function centsToMoney(value) { return value / 100; }
 
-  /* [HTA 286-309]
+  /* [HTA 300-330]
      Even payments in whole cents, with the rounding drift pushed into the
      FINAL payment so the schedule always sums to the balance exactly.
      paymentCount === 0 yields an empty schedule (reachable when Payment 1
      matches the deposit and the total payment count is 1). */
   function buildFinalAdjustedSchedule(balance, paymentCount) {
     var payments = [];
+    /* [HTA 303-307] Defensive bound: this is also called directly, so it must
+       never be handed a non-finite or unbounded count that would loop or
+       allocate without end. */
+    if (!isFiniteNumber(balance)) balance = 0;
+    if (!isFiniteNumber(paymentCount) || paymentCount < 0) paymentCount = 0;
+    paymentCount = Math.min(Math.floor(paymentCount), MAX_PAYMENTS);
     var totalCents = moneyToCents(balance);
     var regularCents = paymentCount > 0 ? Math.round(totalCents / paymentCount) : 0;
     var usedCents = 0;
@@ -114,9 +138,10 @@
    * 1) Payment Calculator
    * -------------------------------------------------------------------- */
 
-  /* [HTA 390-415] getDepositAmount().
+  /* [HTA 411-440] getDepositAmount().
      NOTE: the HTA reads the deposit fields with parseFloat, so "20abc" parses
-     as 20. Preserved. */
+     as 20. Preserved. The non-finite guards reject "Infinity", which parseFloat
+     DOES return as a real Infinity and isNaN does not catch. */
   function getDepositAmount(packagePrice, raw) {
     var depositType = raw.depositType;
     var depositPercent = parseFloat(raw.depositPercent);
@@ -124,6 +149,8 @@
 
     if (depositType === "percent") {
       if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
+      /* [HTA 416] */
+      if (!isFiniteNumber(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
       if (depositPercent < 0) return { ok: false, message: "Deposit percentage cannot be negative." };
       return {
         ok: true,
@@ -134,6 +161,8 @@
     }
 
     if (isNaN(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
+    /* [HTA 427] */
+    if (!isFiniteNumber(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
     if (depositAmountInput < 0) return { ok: false, message: "Deposit amount cannot be negative." };
 
     return {
@@ -144,16 +173,24 @@
     };
   }
 
-  /* [HTA 424-517] calculatePayments().
+  /* [HTA 449-560] calculatePayments().
      Input: raw strings exactly as they come off the form controls.
-     Output: { ok:false, error } or a structured result for the renderer. */
+     Output: { ok:false, error } or a structured result for the renderer.
+     When the count is clamped, `clampedPaymentCount` carries the new value so
+     the UI can write it back into the field exactly as the HTA does. */
   function computePayments(raw) {
     var packagePrice = parseFloat(raw.packagePrice);
     var totalPayments = parseInt(raw.totalPayments, 10);
     var firstMatches = raw.firstMatchesDeposit === "yes";
+    var clampedPaymentCount = null;
 
-    /* [HTA 433-447] validation order is load-bearing */
+    /* [HTA 458-485] validation order is load-bearing */
     if (isNaN(packagePrice) || isNaN(totalPayments)) {
+      return { ok: false, error: "Please enter valid numbers." };
+    }
+    /* [HTA 462-466] isNaN misses Infinity, which would reach the arithmetic
+       and render "$Infinity"/"$NaN" amounts. Reject non-finite explicitly. */
+    if (!isFiniteNumber(packagePrice) || !isFiniteNumber(totalPayments)) {
       return { ok: false, error: "Please enter valid numbers." };
     }
     if (packagePrice < 0) {
@@ -161,6 +198,12 @@
     }
     if (totalPayments < 1) {
       return { ok: false, error: "Number of payments must be at least 1." };
+    }
+    /* [HTA 475-479] Silently clamp an over-large count, matching how the
+       Partial Package Refunds tab already clamps the package count to 50. */
+    if (totalPayments > MAX_PAYMENTS) {
+      totalPayments = MAX_PAYMENTS;
+      clampedPaymentCount = MAX_PAYMENTS;
     }
 
     var depositInfo = getDepositAmount(packagePrice, raw);
@@ -242,6 +285,7 @@
       depositValueText: depositInfo.valueText,
       remainder: remainder,
       paymentCount: firstMatches ? remainingCount : totalPayments,
+      clampedPaymentCount: clampedPaymentCount,
       regular: eachPayment,
       schedule: schedule,
       summary: summary,
@@ -285,8 +329,13 @@
     var amountPaid = parseFloat(raw.amountPaid);
     var tpp = parseFloat(raw.tpp);
 
-    /* [HTA 538-547] */
+    /* [HTA 572-583] */
     if (isNaN(totalCost) || isNaN(amountPaid) || isNaN(tpp)) {
+      return { ok: false, error: "Please enter valid non-negative numbers." };
+    }
+    /* [HTA 577-581] Reject Infinity, which isNaN allows through into the
+       refund arithmetic. */
+    if (!isFiniteNumber(totalCost) || !isFiniteNumber(amountPaid) || !isFiniteNumber(tpp)) {
       return { ok: false, error: "Please enter valid non-negative numbers." };
     }
     if (totalCost < 0 || amountPaid < 0 || tpp < 0) {
@@ -325,8 +374,10 @@
    * 3) Partial Package Refunds
    * -------------------------------------------------------------------- */
 
-  /* [HTA 604-607] the package-count clamp lives in the input builder */
-  var PARTIAL_MAX_PACKAGES = 50;
+  /* [HTA 644-648] the package-count clamp also lives in the input builder.
+     Alias of MAX_PACKAGES - kept as a named export because app.js builds the
+     package rows against it. One source of truth. */
+  var PARTIAL_MAX_PACKAGES = MAX_PACKAGES;
 
   /* [HTA 625-751] calculatePartialRefund().
      raw = { packageCount, tpp, nonRefundPercent, amountPaid,
@@ -354,10 +405,24 @@
     var selectedCount = 0;
     var summary = [];
     var i = 0;
+    var clampedPackageCount = null;
 
-    /* [HTA 646-660] validation order is load-bearing */
+    /* [HTA 686-712] validation order is load-bearing */
     if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid)) {
       return { ok: false, error: "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices." };
+    }
+    /* [HTA 691-697] isNaN misses Infinity; a non-finite count would also drive
+       the allocation loop below without end. */
+    if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid)) {
+      return { ok: false, error: "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices." };
+    }
+    /* [HTA 698-706] The allocation loop below runs `count` times regardless of
+       how many price rows exist, so the 50-package ceiling must be enforced
+       HERE as well as in updatePartialPackageInputs. Without this, a pasted
+       count of 50,000,000 stalls the app for ~26 seconds with two rows. */
+    if (count > MAX_PACKAGES) {
+      count = MAX_PACKAGES;
+      clampedPackageCount = MAX_PACKAGES;
     }
     if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0) {
       return { ok: false, error: "Negative values are not allowed." };
@@ -376,7 +441,7 @@
       var entry = entries[i - 1];
       if (!entry) continue;
       var price = parseMoney(entry.price);
-      if (isNaN(price) || price < 0) {
+      if (isNaN(price) || price < 0 || !isFiniteNumber(price)) {
         return { ok: false, error: "Please enter a valid price for Package " + i + " (for example 4923.00 or 4,923.00)." };
       }
       prices.push(roundMoney(price));
@@ -454,6 +519,7 @@
     return {
       ok: true,
       count: count,
+      clampedPackageCount: clampedPackageCount,
       tppEach: tppEach,
       nonRefundPercent: nonRefundPercent,
       amountPaid: amountPaid,
@@ -480,6 +546,7 @@
 
   return {
     /* helpers */
+    isFiniteNumber: isFiniteNumber,
     roundToDollar: roundToDollar,
     roundMoney: roundMoney,
     formatMoney: formatMoney,
@@ -499,6 +566,8 @@
     PAYMENT_DEFAULTS: PAYMENT_DEFAULTS,
     PARTIAL_DEFAULTS: PARTIAL_DEFAULTS,
     PARTIAL_MAX_PACKAGES: PARTIAL_MAX_PACKAGES,
+    MAX_PAYMENTS: MAX_PAYMENTS,
+    MAX_PACKAGES: MAX_PACKAGES,
     REFUND_NONREFUNDABLE_RATE: REFUND_NONREFUNDABLE_RATE
   };
 }));

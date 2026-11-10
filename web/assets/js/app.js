@@ -164,6 +164,13 @@
       return;
     }
 
+    /* The HTA writes a clamped count back into the visible field
+       (byId("totalPayments").value = String(MAX_PAYMENTS)). Mirror that so the
+       two builds behave identically on screen, not just in the numbers. */
+    if (res.clampedPaymentCount !== null) {
+      byId('totalPayments').value = String(res.clampedPaymentCount);
+    }
+
     renderSummary(summaryBox, res.summary);
     res.lines.forEach(function (line) {
       var variant = (line.label === 'Deposit') ? 'deposit' : null;
@@ -320,6 +327,14 @@
       return;
     }
 
+    /* Mirror the HTA's write-back of a clamped package count, then rebuild the
+       rows so the visible list matches the clamped count. */
+    if (res.clampedPackageCount !== null) {
+      byId('partialPackageCount').value = String(res.clampedPackageCount);
+      updatePartialPackageInputs();
+      return;
+    }
+
     renderSummary(summaryBox, res.summary);
 
     var shown = 0;
@@ -375,7 +390,7 @@
       previous.push({ price: existing[p].value, selected: !!(chk && chk.checked) });
     }
 
-    if (isNaN(count) || count < 1) {
+    if (isNaN(count) || count < 1 || !C.isFiniteNumber(count)) {
       clear(wrap);
       setError(byId('errorBox3'), 'Number of packages must be at least 1.');
       clear(byId('summaryBox3'));

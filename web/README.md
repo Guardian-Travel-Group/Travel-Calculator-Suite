@@ -4,7 +4,9 @@ A browser-based version of the Travel Calculator Suite for modern desktop and
 mobile browsers. It contains all three calculators with **math ported directly
 from the HTA**, not rewritten.
 
-The original Windows HTA is **untouched** and remains the Windows fallback.
+The Windows HTA remains the Windows fallback. It received one approved change in
+this branch — a bounded payment/package count, applied identically to both
+builds — and is otherwise unaltered. See "Bounded counts" below.
 
 ---
 
@@ -54,13 +56,19 @@ Authoritative source artifact:
 
 | File | md5 |
 | --- | --- |
-| `TCS V5` | `d9304122b4e2d60772545c129b371a9a` |
-| `Travel Calculator Suite.hta` | `d9304122b4e2d60772545c129b371a9a` |
-| `installer-package/Travel Calculator Suite.hta` | `d9304122b4e2d60772545c129b371a9a` |
+| `TCS V5` | `a02366baa021a4eef4ebe78667b98d4e` |
+| `Travel Calculator Suite.hta` | `a02366baa021a4eef4ebe78667b98d4e` |
+| `installer-package/Travel Calculator Suite.hta` | `a02366baa021a4eef4ebe78667b98d4e` |
 
 All three are byte-identical and are the only copies containing the
 Partial Package Refunds tab. (`Travel-Calculator-Suite V3` and
 `travel_calculator_suite_updated_v2.hta` are older and lack it — not used.)
+
+> **Note:** the HTA was `d9304122b4e2d60772545c129b371a9a` at `a735813`. It
+> changed in this branch — and only in this branch — to apply the bounded-count
+> fix described below. That change was explicitly approved, because the fix has
+> to land in both builds for parity to stay meaningful. No formula, rounding
+> step, or message text was altered.
 
 ### Verifying parity
 
@@ -73,8 +81,8 @@ both implementations over the same inputs, and asserts the resulting
 error / summary / results HTML is **identical string-for-string** — so a drift
 of one cent, one label, or one validation message fails the run.
 
-Current status: **247 passed, 0 failed** (239 scenarios compared against live
-HTA code + 8 unit invariants).
+Current status: **329 passed, 0 failed** (313 scenarios compared against live
+HTA code + 16 unit invariants).
 
 Coverage includes the three gates called out for review:
 
@@ -87,14 +95,62 @@ Coverage includes the three gates called out for review:
   package price; the TPP-shortfall branch probed at exactly total TPP and
   ±1 cent; zero-price packages; the trip-value overpay guard at +1 cent.
 
-The harness was mutation-tested to confirm it is not vacuous. Three deliberate
-breaks to the core math were each caught:
+…and the bounded-count behaviour described below: the cap boundary (119 / 120 /
+121), the clamp write-back, `Infinity`, `-Infinity`, `NaN`, `1e500`, and huge
+finite values (`999999999`, `2147483647`).
+
+The harness was mutation-tested to confirm it is not vacuous. Six deliberate
+breaks were each caught:
 
 | Injected fault | Failures |
 | --- | --- |
 | refund rate `0.20` → `0.21` | 16 |
-| schedule `Math.round` → `Math.floor` | 30 |
-| drop the TPP-first allocation rule | 15 |
+| schedule `Math.round` → `Math.floor` | 53 |
+| port payment cap `120` → `121` (HTA left at 120) | 18 |
+| port package cap `50` → `49` (HTA left at 50) | 8 |
+| remove the port's non-finite payment guard | 4 |
+| **HTA** payment cap `120` → `130` (port left at 120) | 18 |
+
+The last row matters: parity breaks whichever side drifts, so the two builds
+cannot silently diverge.
+
+---
+
+## Bounded counts (payment count cap)
+
+User-supplied counts drive loops and array allocation, and were previously
+unbounded in **both** builds. `999999999` payments exhausted memory and crashed
+the process (leaving ~1.2GB core dumps); a non-finite count risked an endless
+loop and a hung tab.
+
+Both builds now enforce the same rules:
+
+| Constant | Value | Rationale |
+| --- | --- | --- |
+| `MAX_PAYMENTS` | 120 | 10 years of monthly payments, far beyond any real travel package |
+| `MAX_PACKAGES` | 50 | the pre-existing package ceiling, now also enforced in the calculation |
+
+- **Over-large counts clamp silently**, following the precedent the Partial
+  Package Refunds tab already set for package count.
+- **Non-finite values are rejected explicitly** with the existing error
+  message. `isNaN` alone does *not* catch `Infinity`; `isFiniteNumber()` does.
+  This mattered for the money fields too, where `parseFloat("Infinity")`
+  returns a real `Infinity` and previously rendered `$Infinity` / `$NaN`.
+- `buildFinalAdjustedSchedule()` carries its own defensive bound, because it is
+  a public entry point called directly by tests.
+- The 50-package clamp is now enforced **inside the calculation**, not only in
+  the input builder. The allocation loop runs `count` times regardless of how
+  many price rows exist, so a pasted count of 50,000,000 previously stalled the
+  HTA for ~26 seconds with just two rows on screen.
+
+### Clamp write-back is visible in both builds
+
+The HTA writes the capped value back into the input field, so staff see the
+count change. The web build does the same: `calc.js` stays pure and reports the
+clamp via `clampedPaymentCount` / `clampedPackageCount`, and `app.js` performs
+the DOM write. The parity suite compares the resulting **field value** in
+addition to the rendered HTML, so a write-back present in one build but not the
+other fails the run.
 
 ---
 
@@ -147,4 +203,6 @@ them without a business decision.**
 - Print stylesheet included, so a refund breakdown can be printed or saved to
   PDF for a file note.
 
-No formula, rounding step, validation rule, or message text was changed.
+No formula, rounding step, or message text was changed. The only behavioural
+change is the bounded count described above, which is applied identically to the
+HTA and the web build.

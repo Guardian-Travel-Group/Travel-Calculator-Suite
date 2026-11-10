@@ -24,9 +24,12 @@ var failed = 0;
 var failures = [];
 
 function compare(kind, name, htaOut, portOut) {
-  var fields = ['error', 'summary', 'results'];
+  /* The clamp's visible side effect (the value written back into the count
+     field) is compared alongside the rendered HTML. */
+  var fields = ['error', 'summary', 'results', 'totalPaymentsField', 'packageCountField'];
   var mismatches = [];
   fields.forEach(function (f) {
+    if (!(f in htaOut) && !(f in portOut)) return;
     var a = htaOut[f] == null ? '' : String(htaOut[f]);
     var b = portOut[f] == null ? '' : String(portOut[f]);
     if (a !== b) mismatches.push({ field: f, hta: a, port: b });
@@ -398,6 +401,101 @@ checkPartial('25 packages mixed selection', partialRaw({
 }));
 
 /* =====================================================================
+ * 1b) PAYMENT COUNT BOUNDS  (QA blocker: unbounded totalPayments)
+ *
+ * Both builds now reject non-finite input and silently clamp the count to
+ * MAX_PAYMENTS (120), following the Partial Refunds tab's existing clamp-to-50
+ * precedent. The HTA writes the clamped value back into the visible field, and
+ * the port reports it via `clampedPaymentCount` for the UI to mirror.
+ * =================================================================== */
+
+/* Cap boundary: 119 and 120 pass through untouched, 121 clamps to 120. */
+['119', '120', '121', '122', '200'].forEach(function (n) {
+  checkPayments('cap boundary n=' + n + ' match=yes', payRaw({ totalPayments: n }));
+  checkPayments('cap boundary n=' + n + ' match=no', payRaw({ totalPayments: n, firstMatchesDeposit: 'no' }));
+});
+
+/* Values that previously completed slowly or exhausted memory. */
+['121', '500', '1000', '100000', '999999999', '2147483647'].forEach(function (n) {
+  checkPayments('clamped large n=' + n, payRaw({ totalPayments: n, firstMatchesDeposit: 'no' }));
+});
+
+/* Non-finite and malformed counts. */
+['Infinity', '-Infinity', 'NaN', '1e500', '-1e500'].forEach(function (n) {
+  checkPayments('non-finite count="' + n + '"', payRaw({ totalPayments: n }));
+  checkPayments('non-finite count="' + n + '" match=no', payRaw({ totalPayments: n, firstMatchesDeposit: 'no' }));
+});
+
+/* Non-finite MONEY fields. parseFloat returns a real Infinity here, which the
+   old isNaN-only guards let through into the arithmetic. */
+['Infinity', '-Infinity', '1e500'].forEach(function (v) {
+  checkPayments('non-finite price="' + v + '"', payRaw({ packagePrice: v }));
+  checkPayments('non-finite depositPercent="' + v + '"', payRaw({ depositPercent: v }));
+  checkPayments('non-finite depositAmount="' + v + '"', payRaw({ depositType: 'amount', depositAmount: v }));
+});
+
+/* The clamp must not disturb the cent-adjustment at the cap. */
+['2500', '1000.01', '999.99', '0.07', '1234.56'].forEach(function (p) {
+  checkPayments('cap cent-adjust price=' + p + ' n=120', payRaw({ packagePrice: p, totalPayments: '120', firstMatchesDeposit: 'no' }));
+  checkPayments('cap cent-adjust price=' + p + ' n=121', payRaw({ packagePrice: p, totalPayments: '121', firstMatchesDeposit: 'no' }));
+});
+
+/* =====================================================================
+ * 2b) REFUND NON-FINITE GUARDS
+ * =================================================================== */
+[
+  ['infinite cost', { totalCost: 'Infinity', amountPaid: '2000', tpp: '481' }],
+  ['infinite paid', { totalCost: '2500', amountPaid: 'Infinity', tpp: '481' }],
+  ['infinite tpp', { totalCost: '2500', amountPaid: '2000', tpp: 'Infinity' }],
+  ['negative infinite cost', { totalCost: '-Infinity', amountPaid: '2000', tpp: '481' }],
+  ['all infinite', { totalCost: 'Infinity', amountPaid: 'Infinity', tpp: 'Infinity' }],
+  ['overflow literal', { totalCost: '1e500', amountPaid: '2000', tpp: '481' }]
+].forEach(function (c) { checkRefund('non-finite ' + c[0], c[1]); });
+
+/* =====================================================================
+ * 3b) PARTIAL REFUND COUNT BOUNDS + NON-FINITE GUARDS
+ *
+ * The allocation loop runs `count` times regardless of how many price rows
+ * exist, so the 50-package ceiling is now enforced in the calculation too.
+ * =================================================================== */
+
+/* Package-count cap boundary, with rows supplied up to the cap. */
+[['49', 49], ['50', 50], ['51', 51], ['60', 60]].forEach(function (c) {
+  var rows = [];
+  for (var k = 0; k < c[1]; k++) rows.push([String(1000 + k), k === 0]);
+  checkPartial('pkg cap boundary count=' + c[0], partialRaw({
+    packageCount: c[0], amountPaid: '30000', packages: pkgs(rows)
+  }));
+});
+
+/* Huge counts with only a couple of rows on screen - the slow path. */
+['51', '1000', '50000000', '999999999'].forEach(function (n) {
+  checkPartial('pkg clamped count=' + n + ' with 2 rows', partialRaw({
+    packageCount: n, amountPaid: '1000',
+    packages: pkgs([['1000', true], ['1000', false]])
+  }));
+});
+
+/* Non-finite partial inputs. */
+['Infinity', '-Infinity', '1e500'].forEach(function (v) {
+  checkPartial('non-finite pkg count="' + v + '"', partialRaw({
+    packageCount: v, amountPaid: '3000', packages: pkgs([['1000', true], ['1000', true]])
+  }));
+  checkPartial('non-finite pkg tpp="' + v + '"', partialRaw({
+    packageCount: '2', tpp: v, amountPaid: '3000', packages: pkgs([['1000', true], ['1000', true]])
+  }));
+  checkPartial('non-finite pkg percent="' + v + '"', partialRaw({
+    packageCount: '2', nonRefundPercent: v, amountPaid: '3000', packages: pkgs([['1000', true], ['1000', true]])
+  }));
+  checkPartial('non-finite pkg paid="' + v + '"', partialRaw({
+    packageCount: '2', amountPaid: v, packages: pkgs([['1000', true], ['1000', true]])
+  }));
+  checkPartial('non-finite pkg price="' + v + '"', partialRaw({
+    packageCount: '2', amountPaid: '3000', packages: pkgs([[v, true], ['1000', true]])
+  }));
+});
+
+/* =====================================================================
  * 4) UNIT-LEVEL INVARIANTS (independent of the HTA comparison)
  * =================================================================== */
 
@@ -481,6 +579,79 @@ unit('parseMoney strictness', function () {
   assert.ok(isNaN(TCSCalc.parseMoney('')), 'empty should reject');
   assert.strictEqual(TCSCalc.parseMoney('$4,923.00'), 4923);
   assert.strictEqual(TCSCalc.parseMoney('4923'), 4923);
+});
+
+/* ---- bounds invariants (the QA blocker) ---- */
+
+unit('payment schedule never exceeds MAX_PAYMENTS', function () {
+  [121, 500, 100000, 999999999, 2147483647].forEach(function (n) {
+    var s = TCSCalc.buildFinalAdjustedSchedule(2500, n);
+    assert.ok(s.payments.length <= TCSCalc.MAX_PAYMENTS,
+      n + ' produced ' + s.payments.length + ' payments');
+  });
+});
+
+unit('buildFinalAdjustedSchedule terminates on non-finite counts', function () {
+  [Infinity, -Infinity, NaN, undefined, null, '120'].forEach(function (n) {
+    var s = TCSCalc.buildFinalAdjustedSchedule(1000, n);
+    assert.ok(Array.isArray(s.payments), 'no array for ' + String(n));
+    assert.ok(s.payments.length <= TCSCalc.MAX_PAYMENTS, 'unbounded for ' + String(n));
+  });
+});
+
+unit('buildFinalAdjustedSchedule tolerates non-finite balance', function () {
+  [Infinity, -Infinity, NaN].forEach(function (b) {
+    var s = TCSCalc.buildFinalAdjustedSchedule(b, 6);
+    s.payments.forEach(function (p) {
+      assert.ok(isFinite(p), 'non-finite payment produced for balance ' + String(b));
+    });
+  });
+});
+
+unit('clamped schedule still sums to the balance exactly', function () {
+  [2500, 1000.01, 999.99, 0.07, 1234.56].forEach(function (b) {
+    var s = TCSCalc.buildFinalAdjustedSchedule(b, 999999);
+    var sumCents = s.payments.reduce(function (acc, p) { return acc + TCSCalc.moneyToCents(p); }, 0);
+    assert.strictEqual(sumCents, TCSCalc.moneyToCents(b), 'clamped schedule drifted for ' + b);
+    assert.strictEqual(s.payments.length, TCSCalc.MAX_PAYMENTS);
+  });
+});
+
+unit('non-finite money input is rejected, never rendered', function () {
+  ['Infinity', '-Infinity', '1e500'].forEach(function (v) {
+    var p = TCSCalc.computePayments({
+      packagePrice: v, depositType: 'percent', depositPercent: '20',
+      depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'no'
+    });
+    assert.strictEqual(p.ok, false, 'price ' + v + ' was accepted');
+
+    var r = TCSCalc.computeRefund({ totalCost: v, amountPaid: '2000', tpp: '481' }, new Date(sandbox.frozenMs));
+    assert.strictEqual(r.ok, false, 'refund cost ' + v + ' was accepted');
+  });
+});
+
+unit('partial refund clamps package count in the calculation', function () {
+  var r = TCSCalc.computePartialRefund({
+    packageCount: '50000000', tpp: '481', nonRefundPercent: '20', amountPaid: '1000',
+    packages: [{ price: '1000', selected: true }, { price: '1000', selected: false }]
+  });
+  assert.ok(r.ok, 'expected ok, got: ' + r.error);
+  assert.strictEqual(r.count, TCSCalc.MAX_PACKAGES, 'count was not clamped');
+  assert.strictEqual(r.clampedPackageCount, TCSCalc.MAX_PACKAGES);
+});
+
+unit('bounds constants match the documented thresholds', function () {
+  assert.strictEqual(TCSCalc.MAX_PAYMENTS, 120);
+  assert.strictEqual(TCSCalc.MAX_PACKAGES, 50);
+  assert.strictEqual(TCSCalc.PARTIAL_MAX_PACKAGES, TCSCalc.MAX_PACKAGES);
+});
+
+unit('HTA and port declare the same thresholds', function () {
+  var fs = require('fs');
+  var src = fs.readFileSync(HTA_PATH, 'utf8');
+  assert.ok(/var MAX_PAYMENTS = 120;/.test(src), 'HTA MAX_PAYMENTS is not 120');
+  assert.ok(/var MAX_PACKAGES = 50;/.test(src), 'HTA MAX_PACKAGES is not 50');
+  assert.ok(/function isFiniteNumber/.test(src), 'HTA lacks isFiniteNumber');
 });
 
 /* =====================================================================

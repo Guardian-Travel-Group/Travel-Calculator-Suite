@@ -258,6 +258,20 @@ body.dark .packageEntry {
 
 <script type="text/javascript">
 function byId(id) { return document.getElementById(id); }
+
+/* Upper bounds on user-supplied counts that drive loops and array allocation.
+   Without these, a pasted or fat-fingered count hangs or crashes the app:
+   999999999 payments exhausts memory, and a non-finite count loops forever.
+   MAX_PAYMENTS is 120 (10 years of monthly payments), far beyond any real
+   travel package. MAX_PACKAGES keeps the pre-existing 50-package ceiling. */
+var MAX_PAYMENTS = 120;
+var MAX_PACKAGES = 50;
+
+/* isNaN() alone does not reject Infinity, so every numeric field is checked
+   with this before it reaches arithmetic, a loop, or an array allocation. */
+function isFiniteNumber(value) {
+  return typeof value === "number" && isFinite(value);
+}
 function roundToDollar(value) { return Math.round(value); }
 function roundMoney(value) { return Math.round(value * 100) / 100; }
 function formatMoney(value) { return "$" + roundMoney(value).toFixed(2); }
@@ -285,6 +299,11 @@ function moneyToCents(value) { return Math.round(value * 100); }
 function centsToMoney(value) { return value / 100; }
 function buildFinalAdjustedSchedule(balance, paymentCount) {
   var payments = [];
+  /* Defensive bound: this is also called directly, so it must never be handed
+     a non-finite or unbounded count that would loop or allocate without end. */
+  if (!isFiniteNumber(balance)) balance = 0;
+  if (!isFiniteNumber(paymentCount) || paymentCount < 0) paymentCount = 0;
+  paymentCount = Math.min(Math.floor(paymentCount), MAX_PAYMENTS);
   var totalCents = moneyToCents(balance);
   var regularCents = paymentCount > 0 ? Math.round(totalCents / paymentCount) : 0;
   var usedCents = 0;
@@ -394,6 +413,7 @@ function getDepositAmount(packagePrice) {
 
   if (depositType === "percent") {
     if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
+    if (!isFiniteNumber(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
     if (depositPercent < 0) return { ok: false, message: "Deposit percentage cannot be negative." };
     return {
       ok: true,
@@ -404,6 +424,7 @@ function getDepositAmount(packagePrice) {
   }
 
   if (isNaN(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
+  if (!isFiniteNumber(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
   if (depositAmountInput < 0) return { ok: false, message: "Deposit amount cannot be negative." };
 
   return {
@@ -435,6 +456,13 @@ function calculatePayments() {
     setPanelHeights();
     return;
   }
+  /* isNaN misses Infinity, which would reach the arithmetic and render
+     "$Infinity"/"$NaN" amounts. Reject non-finite values explicitly. */
+  if (!isFiniteNumber(packagePrice) || !isFiniteNumber(totalPayments)) {
+    byId("errorBox1").innerHTML = "Please enter valid numbers.";
+    setPanelHeights();
+    return;
+  }
   if (packagePrice < 0) {
     byId("errorBox1").innerHTML = "Package price cannot be negative.";
     setPanelHeights();
@@ -444,6 +472,12 @@ function calculatePayments() {
     byId("errorBox1").innerHTML = "Number of payments must be at least 1.";
     setPanelHeights();
     return;
+  }
+  /* Silently clamp an over-large count, matching how the Partial Package
+     Refunds tab already clamps the package count to 50. */
+  if (totalPayments > MAX_PAYMENTS) {
+    byId("totalPayments").value = String(MAX_PAYMENTS);
+    totalPayments = MAX_PAYMENTS;
   }
 
   var depositInfo = getDepositAmount(packagePrice);
@@ -540,6 +574,12 @@ function calculateRefund() {
     setPanelHeights();
     return;
   }
+  /* Reject Infinity, which isNaN allows through into the refund arithmetic. */
+  if (!isFiniteNumber(totalCost) || !isFiniteNumber(amountPaid) || !isFiniteNumber(tpp)) {
+    byId("errorBox2").innerHTML = "Please enter valid non-negative numbers.";
+    setPanelHeights();
+    return;
+  }
   if (totalCost < 0 || amountPaid < 0 || tpp < 0) {
     byId("errorBox2").innerHTML = "Negative values are not allowed.";
     setPanelHeights();
@@ -593,7 +633,7 @@ function updatePartialPackageInputs() {
   var html = "";
   var i = 0;
 
-  if (isNaN(count) || count < 1) {
+  if (isNaN(count) || count < 1 || !isFiniteNumber(count)) {
     wrap.innerHTML = "";
     byId("errorBox3").innerHTML = "Number of packages must be at least 1.";
     byId("summaryBox3").innerHTML = "";
@@ -601,9 +641,9 @@ function updatePartialPackageInputs() {
     setPanelHeights();
     return;
   }
-  if (count > 50) {
-    byId("partialPackageCount").value = "50";
-    count = 50;
+  if (count > MAX_PACKAGES) {
+    byId("partialPackageCount").value = String(MAX_PACKAGES);
+    count = MAX_PACKAGES;
   }
 
   byId("errorBox3").innerHTML = "";
@@ -648,6 +688,21 @@ function calculatePartialRefund() {
     setPanelHeights();
     return;
   }
+  /* isNaN misses Infinity; a non-finite count would also drive the allocation
+     loop below without end. */
+  if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid)) {
+    byId("errorBox3").innerHTML = "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.";
+    setPanelHeights();
+    return;
+  }
+  /* The allocation loop below runs `count` times regardless of how many price
+     rows exist, so the 50-package ceiling must be enforced HERE as well as in
+     updatePartialPackageInputs. Without this, a pasted count of 50,000,000
+     stalls the app for ~26 seconds even with two rows on screen. */
+  if (count > MAX_PACKAGES) {
+    byId("partialPackageCount").value = String(MAX_PACKAGES);
+    count = MAX_PACKAGES;
+  }
   if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0) {
     byId("errorBox3").innerHTML = "Negative values are not allowed.";
     setPanelHeights();
@@ -664,7 +719,7 @@ function calculatePartialRefund() {
     var cancelInput = byId("partialPackageCancel" + i);
     if (!priceInput) continue;
     var price = parseMoney(priceInput.value);
-    if (isNaN(price) || price < 0) {
+    if (isNaN(price) || price < 0 || !isFiniteNumber(price)) {
       byId("errorBox3").innerHTML = "Please enter a valid price for Package " + i + " (for example 4923.00 or 4,923.00).";
       setPanelHeights();
       return;

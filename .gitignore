@@ -1,0 +1,14 @@
+# Node core dumps. Stress-testing the payment-count cap with values like
+# 999999999 used to crash V8 and drop ~1.2GB core files in the working
+# directory. The bound now prevents the crash, but keep these ignored so a
+# future stress run can never be committed by accident.
+core
+core.*
+*.core
+vgcore.*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*~
+*.swp

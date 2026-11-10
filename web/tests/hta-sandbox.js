@@ -133,7 +133,12 @@ function createSandbox(htaPath, options) {
     set('totalPayments', raw.totalPayments);
     set('firstMatchesDeposit', raw.firstMatchesDeposit);
     context.calculatePayments();
-    return { error: read('errorBox1'), summary: read('summaryBox1'), results: read('resultsBox1') };
+    return {
+      error: read('errorBox1'), summary: read('summaryBox1'), results: read('resultsBox1'),
+      /* The clamp writes the capped value back into the field; surfacing it
+         means the port's clampedPaymentCount is compared too. */
+      totalPaymentsField: document.getElementById('totalPayments').value
+    };
   }
 
   function runRefund(raw) {
@@ -155,7 +160,10 @@ function createSandbox(htaPath, options) {
       addPackageRow(idx + 1, pkg.price, pkg.selected);
     });
     context.calculatePartialRefund();
-    return { error: read('errorBox3'), summary: read('summaryBox3'), results: read('resultsBox3') };
+    return {
+      error: read('errorBox3'), summary: read('summaryBox3'), results: read('resultsBox3'),
+      packageCountField: document.getElementById('partialPackageCount').value
+    };
   }
 
   return {
