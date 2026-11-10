@@ -142,6 +142,38 @@ var FAULTS = [
     find: 'return { ok: false, error: message, clampedPaymentCount: null };',
     replace: 'return { ok: false, error: message, clampedPaymentCount: MAX_PAYMENTS };',
     note: 'over-correcting the write-back must fail too'
+  },
+  {
+    id: 'money-parsefloat-regression',
+    label: 'revert money parsing to `parseFloat` (comma defect)',
+    file: 'web/assets/js/calc.js',
+    find: '    var packagePrice = parseMoney(raw.packagePrice);',
+    replace: '    var packagePrice = parseFloat(raw.packagePrice);',
+    note: "reintroduces the '4,250' -> 4 silent misparse"
+  },
+  {
+    id: 'refund-parsefloat-regression',
+    label: 'revert refund money parsing to `parseFloat`',
+    file: 'web/assets/js/calc.js',
+    find: '    var totalCost = parseMoney(raw.totalCost);',
+    replace: '    var totalCost = parseFloat(raw.totalCost);',
+    note: "reintroduces the '3,000' -> $0.00 refund"
+  },
+  {
+    id: 'percent-parsefloat-regression',
+    label: 'revert percentage parsing to `parseFloat`',
+    file: 'web/assets/js/calc.js',
+    find: '    var nonRefundPercent = parsePercent(raw.nonRefundPercent);',
+    replace: '    var nonRefundPercent = parseFloat(raw.nonRefundPercent);',
+    note: "reintroduces '150abc' -> 150 silent parse"
+  },
+  {
+    id: 'money-parser-loosened',
+    label: 'loosen parseMoney to accept 3 decimals',
+    file: 'web/assets/js/calc.js',
+    find: 'if (text === "" || !/^-?\\d*(\\.\\d{0,2})?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;',
+    replace: 'if (text === "" || !/^-?\\d*(\\.\\d{0,3})?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;',
+    note: 'the documented 2dp money rule must be enforced'
   }
 ];
 

@@ -286,6 +286,18 @@ function parseMoney(value) {
   if (text === "" || !/^-?\d*(\.\d{0,2})?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;
   return parseFloat(text);
 }
+
+/* Percentages are not money: no currency symbol, no thousands separator, and
+   more than two decimals is legitimate (33.333%). But parseFloat("150abc")
+   returns 150, which is the same silent-garbage problem parseMoney fixes for
+   dollar fields. So percentages get their own strict parser: optional sign,
+   digits, unlimited decimals, nothing else. */
+function parsePercent(value) {
+  var text = String(value == null ? "" : value);
+  text = text.replace(/\s/g, "");
+  if (text === "" || !/^-?\d*(\.\d*)?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;
+  return parseFloat(text);
+}
 function formatSignedMoney(value) {
   var amount = roundMoney(value);
   if (amount > 0) return "+" + formatMoney(amount);
@@ -408,8 +420,8 @@ function setPanelHeights() {
 
 function getDepositAmount(packagePrice) {
   var depositType = byId("depositType").value;
-  var depositPercent = parseFloat(byId("depositPercent").value);
-  var depositAmountInput = parseFloat(byId("depositAmount").value);
+  var depositPercent = parsePercent(byId("depositPercent").value);
+  var depositAmountInput = parseMoney(byId("depositAmount").value);
 
   if (depositType === "percent") {
     if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
@@ -443,7 +455,7 @@ function updateDepositInputs() {
 }
 
 function calculatePayments() {
-  var packagePrice = parseFloat(byId("packagePrice").value);
+  var packagePrice = parseMoney(byId("packagePrice").value);
   var totalPayments = parseInt(byId("totalPayments").value, 10);
   var firstMatches = byId("firstMatchesDeposit").value === "yes";
 
@@ -561,9 +573,9 @@ function resetPayments() {
 }
 
 function calculateRefund() {
-  var totalCost = parseFloat(byId("refundTotalCost").value);
-  var amountPaid = parseFloat(byId("refundAmountPaid").value);
-  var tpp = parseFloat(byId("refundTpp").value);
+  var totalCost = parseMoney(byId("refundTotalCost").value);
+  var amountPaid = parseMoney(byId("refundAmountPaid").value);
+  var tpp = parseMoney(byId("refundTpp").value);
 
   byId("errorBox2").innerHTML = "";
   byId("summaryBox2").innerHTML = "";
@@ -665,7 +677,7 @@ function updatePartialPackageInputs() {
 function calculatePartialRefund() {
   var count = parseInt(byId("partialPackageCount").value, 10);
   var tppEach = parseMoney(byId("partialTpp").value);
-  var nonRefundPercent = parseFloat(byId("partialNonRefundPercent").value);
+  var nonRefundPercent = parsePercent(byId("partialNonRefundPercent").value);
   var amountPaid = parseMoney(byId("partialAmountPaid").value);
   var prices = [];
   var selected = [];

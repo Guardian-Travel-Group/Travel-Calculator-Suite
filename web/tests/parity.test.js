@@ -471,7 +471,13 @@ checkPayments('JIM-1 over-cap + bad deposit type',
   ['infinite deposit amount', { depositType: 'amount', depositAmount: 'Infinity' }],
   ['deposit exceeds price', { depositType: 'amount', depositAmount: '999999' }],
   ['malformed currency deposit', { depositType: 'amount', depositAmount: '$2,500.00.00' }],
-  ['unknown deposit type', { depositType: 'weird', depositAmount: '$2500' }]
+  /* 'weird' falls through to the amount branch in both builds. The amount must
+     be genuinely invalid for this to test an error path: '$2500' was only an
+     error while money fields used parseFloat, and parseMoney now accepts it. */
+  ['unknown deposit type', { depositType: 'weird', depositAmount: 'abc' }],
+  /* Retained as a parity scenario: unknown type + a now-VALID currency amount.
+     Not an error path - it checks both builds agree on the fallthrough. */
+  ['unknown deposit type, valid amount', { depositType: 'weird', depositAmount: '$2500' }]
 ].forEach(function (c) {
   ['121', '500', '999999999'].forEach(function (n) {
     var raw = payRaw(c[1]);
@@ -600,6 +606,86 @@ checkPartial('JIM-2 over-cap + negative paid + out-of-range pct',
   checkPartial('non-finite pkg price="' + v + '"', partialRaw({
     packageCount: '2', amountPaid: '3000', packages: pkgs([[v, true], ['1000', true]])
   }));
+});
+
+/* =====================================================================
+ * 3d) MONEY FIELD PARSING  (comma misparsing defect)
+ *
+ * Every money field on all three tabs, over the full input matrix. These are
+ * HTA-vs-port comparisons, so they guarantee the two builds stay in lockstep
+ * on the new parsing rules. They do NOT by themselves prove the parsing is
+ * CORRECT - both builds shared the bug, so they agreed while both were wrong.
+ * The correctness assertions live in the unit invariants in section 4.
+ * =================================================================== */
+
+var MONEY_INPUTS = [
+  '4,250', '$4,250.00', '3,000', '1,000.50', '$1,234.56', '2500.555',
+  '12abc', '.', '-', '$', '', ' 2,500.00 ', '2500', '$2500', '-1,000',
+  '1,0,0', '20%', '1e3'
+];
+
+/* Payment tab: packagePrice and depositAmount are money. */
+MONEY_INPUTS.forEach(function (v) {
+  checkPayments('money packagePrice=' + JSON.stringify(v),
+    payRaw({ packagePrice: v, depositType: 'amount', depositAmount: '0', firstMatchesDeposit: 'no' }));
+  checkPayments('money depositAmount=' + JSON.stringify(v),
+    payRaw({ packagePrice: '10000', depositType: 'amount', depositAmount: v, firstMatchesDeposit: 'no' }));
+});
+
+/* Refund tab: all three fields are money. */
+MONEY_INPUTS.forEach(function (v) {
+  checkRefund('money totalCost=' + JSON.stringify(v), { totalCost: v, amountPaid: '5000', tpp: '481' });
+  checkRefund('money amountPaid=' + JSON.stringify(v), { totalCost: '6000', amountPaid: v, tpp: '481' });
+  checkRefund('money tpp=' + JSON.stringify(v), { totalCost: '6000', amountPaid: '5000', tpp: v });
+});
+
+/* Partial tab: already parseMoney, included so a regression there is caught. */
+MONEY_INPUTS.forEach(function (v) {
+  checkPartial('money partial tpp=' + JSON.stringify(v),
+    partialRaw({ packageCount: '2', tpp: v, amountPaid: '3000', packages: pkgs([['1000', true], ['2000', false]]) }));
+  checkPartial('money partial amountPaid=' + JSON.stringify(v),
+    partialRaw({ packageCount: '2', amountPaid: v, packages: pkgs([['1000', true], ['2000', false]]) }));
+  checkPartial('money partial price=' + JSON.stringify(v),
+    partialRaw({ packageCount: '2', amountPaid: '3000', packages: pkgs([[v, true], ['2000', false]]) }));
+});
+
+/* Percentage fields: not money. Verifies the two builds agree on whatever
+   rule percentages use, including junk suffixes and extra decimals. */
+var PERCENT_INPUTS = ['20', '33.333', '0', '100', '150abc', '20%', '1,0',
+                      '1e2', '.', '-', '', ' 20 ', '-5', '2.5'];
+PERCENT_INPUTS.forEach(function (v) {
+  checkPayments('percent depositPercent=' + JSON.stringify(v),
+    payRaw({ depositType: 'percent', depositPercent: v, firstMatchesDeposit: 'no' }));
+  checkPartial('percent nonRefundPercent=' + JSON.stringify(v),
+    partialRaw({ packageCount: '2', nonRefundPercent: v, amountPaid: '3000',
+                 packages: pkgs([['1000', true], ['2000', false]]) }));
+});
+
+/* ---- digit-overflow money: still reaches the non-finite guard ----
+   parseMoney rejects "Infinity" and "1e500" outright, so those strings no
+   longer reach the isFiniteNumber() guards. A long run of digits is still
+   valid money syntax and still overflows to Infinity, so it is now the input
+   that keeps those guards load-bearing. Without these scenarios, removing a
+   finite guard goes undetected (the mutation gate proved exactly that). */
+var OVERFLOW = '9'.repeat(400);
+[['price', { packagePrice: OVERFLOW }],
+ ['deposit amount', { depositType: 'amount', depositAmount: OVERFLOW }],
+ ['deposit percent', { depositType: 'percent', depositPercent: OVERFLOW }]
+].forEach(function (c) {
+  checkPayments('payments: digit-overflow ' + c[0], payRaw(c[1]));
+});
+[['total cost', { totalCost: OVERFLOW, amountPaid: '2500', tpp: '481' }],
+ ['amount paid', { totalCost: '10000', amountPaid: OVERFLOW, tpp: '481' }],
+ ['tpp', { totalCost: '10000', amountPaid: '2500', tpp: OVERFLOW }]
+].forEach(function (c) {
+  checkRefund('refund: digit-overflow ' + c[0], c[1]);
+});
+[['amount paid', { amountPaid: OVERFLOW }],
+ ['tpp', { tpp: OVERFLOW }],
+ ['percent', { nonRefundPercent: OVERFLOW }],
+ ['package price', { packages: [{ price: OVERFLOW, selected: true }] }]
+].forEach(function (c) {
+  checkPartial('partial: digit-overflow ' + c[0], partialRaw(c[1]));
 });
 
 /* =====================================================================
@@ -749,9 +835,12 @@ unit('partial refund clamps package count in the calculation', function () {
 
 unit('clamp is reported on error returns, not only success', function () {
   /* The round-2 blocker: calc.js must report the clamp even when it fails,
-     so app.js can write the field before its !ok guard. */
+     so app.js can write the field before its !ok guard.
+     NOTE: the deposit must be genuinely invalid. '$2500' used to be an error
+     here only because the old parseFloat rejected it; parseMoney now accepts
+     it, so 'abc' is used instead. */
   var p = TCSCalc.computePayments({
-    packagePrice: '2500', depositType: 'weird', depositAmount: '$2500',
+    packagePrice: '2500', depositType: 'amount', depositAmount: 'abc',
     depositPercent: '20', totalPayments: '999.99', firstMatchesDeposit: 'no'
   });
   assert.strictEqual(p.ok, false, 'expected a deposit error');
@@ -785,6 +874,164 @@ unit('pre-clamp rejections report no clamp', function () {
   assert.strictEqual(r.ok, false);
   assert.strictEqual(r.clampedPackageCount, null,
     'reported a clamp that the HTA never applied');
+});
+
+/* ---- money parsing correctness (the comma misparsing defect) ----
+   These assert what the code SHOULD do, so they fail while parseFloat is
+   still in use on money fields. Parity scenarios cannot catch this defect:
+   both builds shared it, so they agreed while both were wrong. */
+
+unit('comma-formatted money is parsed, not truncated', function () {
+  /* The headline defect: parseFloat('4,250') === 4, silently. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '4,250', depositType: 'amount', depositAmount: '0',
+    depositPercent: '20', totalPayments: '4', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, true, 'comma price rejected: ' + p.error);
+  assert.strictEqual(p.remainder, 4250,
+    "'4,250' must parse as 4250, got " + p.remainder);
+
+  /* '$4,250.00' was rejected outright before. */
+  var q = TCSCalc.computePayments({
+    packagePrice: '$4,250.00', depositType: 'amount', depositAmount: '0',
+    depositPercent: '20', totalPayments: '4', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(q.ok, true, "'$4,250.00' rejected: " + q.error);
+  assert.strictEqual(q.remainder, 4250);
+});
+
+unit('comma-formatted money in the refund calculator', function () {
+  /* '3,000' used to parse as 3, producing a $0.00 refund. */
+  var r = TCSCalc.computeRefund(
+    { totalCost: '3,000', amountPaid: '2,500', tpp: '481' }, new Date(sandbox.frozenMs));
+  assert.strictEqual(r.ok, true, 'comma refund inputs rejected: ' + r.error);
+  /* 2500 - (481 + 20% of 3000) = 2500 - 1081 = 1419 */
+  assert.strictEqual(r.refund, 1419,
+    'expected 1419 from comma-formatted inputs, got ' + r.refund);
+
+  var s = TCSCalc.computeRefund(
+    { totalCost: '$3,000.00', amountPaid: '$2,500.00', tpp: '$481.00' }, new Date(sandbox.frozenMs));
+  assert.strictEqual(s.ok, true, 'currency-formatted refund inputs rejected: ' + s.error);
+  assert.strictEqual(s.refund, 1419);
+});
+
+unit('comma-formatted deposit amount', function () {
+  var p = TCSCalc.computePayments({
+    packagePrice: '10,000', depositType: 'amount', depositAmount: '1,500',
+    depositPercent: '20', totalPayments: '4', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, true, 'comma deposit rejected: ' + p.error);
+  assert.strictEqual(p.deposit, 1500, "'1,500' must parse as 1500, got " + p.deposit);
+  assert.strictEqual(p.remainder, 8500);
+});
+
+unit('junk money input is rejected, not silently truncated', function () {
+  /* parseFloat('12abc') === 12. A money field must refuse it.
+     NOTE: '1,0,0' is deliberately NOT in this list. parseMoney strips all
+     commas before validating, so it does not verify thousands grouping and
+     '1,0,0' parses as 100. That is pre-existing behaviour which was already
+     live on the Partial Refunds tab before this change; unifying the parser
+     spreads it to the other two tabs rather than introducing it. Flagged in
+     the README rather than silently changed, because tightening it is a
+     separate decision about what staff are allowed to type. */
+  [['packagePrice', '12abc'], ['packagePrice', '.'], ['packagePrice', '-'],
+   ['packagePrice', '$'], ['packagePrice', '20%'], ['packagePrice', 'abc']
+  ].forEach(function (c) {
+    var raw = {
+      packagePrice: '2500', depositType: 'amount', depositAmount: '0',
+      depositPercent: '20', totalPayments: '4', firstMatchesDeposit: 'no'
+    };
+    raw[c[0]] = c[1];
+    var p = TCSCalc.computePayments(raw);
+    assert.strictEqual(p.ok, false,
+      JSON.stringify(c[1]) + ' was accepted as money (parsed silently)');
+  });
+
+  ['12abc', '$', '-', '.', '20%'].forEach(function (v) {
+    var r = TCSCalc.computeRefund(
+      { totalCost: v, amountPaid: '2500', tpp: '481' }, new Date(sandbox.frozenMs));
+    assert.strictEqual(r.ok, false, 'refund accepted junk cost ' + JSON.stringify(v));
+  });
+});
+
+unit('money fields use one shared parser across all three tabs', function () {
+  /* Same string must mean the same number everywhere. Before the fix the
+     Payment/Refund tabs used parseFloat and the Partial tab parseMoney, so
+     '2,500' meant 2 on two tabs and 2500 on the third.
+     Each tab is driven so the field under test is the ONLY contributor to
+     the number being asserted. */
+  ['2,500', '$2,500.00', '2500', '2500.50'].forEach(function (v) {
+    var expected = TCSCalc.parseMoney(v);
+
+    /* Payment: price with a zero deposit -> remainder is the parsed price. */
+    var pay = TCSCalc.computePayments({
+      packagePrice: v, depositType: 'amount', depositAmount: '0',
+      depositPercent: '20', totalPayments: '1', firstMatchesDeposit: 'no'
+    });
+    assert.strictEqual(pay.ok, true, 'payment rejected ' + v);
+    assert.strictEqual(pay.remainder, expected, 'payment differs for ' + v);
+
+    /* Refund: zero cost and zero TPP -> refund is the parsed amount paid. */
+    var ref = TCSCalc.computeRefund(
+      { totalCost: '0', amountPaid: v, tpp: '0' }, new Date(sandbox.frozenMs));
+    assert.strictEqual(ref.ok, true, 'refund rejected ' + v);
+    assert.strictEqual(ref.refund, expected, 'refund differs for ' + v);
+
+    /* Partial: zero TPP and 0% -> the one selected package's allocated paid
+       equals the parsed amount, when the package is the only one. */
+    var par = TCSCalc.computePartialRefund({
+      packageCount: '1', tpp: '0', nonRefundPercent: '0', amountPaid: v,
+      packages: [{ price: '100000', selected: true }]
+    });
+    assert.strictEqual(par.ok, true, 'partial rejected ' + v);
+    assert.strictEqual(par.packages[0].refund, expected, 'partial differs for ' + v);
+  });
+});
+
+unit('three-decimal money is rejected (documented strictness)', function () {
+  /* Deliberate behaviour change: parseFloat accepted 2500.555, parseMoney
+     does not. A money field has at most 2 decimals; silently rounding a
+     third would hide a typo in a dollar figure. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '2500.555', depositType: 'amount', depositAmount: '0',
+    depositPercent: '20', totalPayments: '4', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, false, '2500.555 should be rejected on a money field');
+});
+
+unit('percentage fields reject junk but allow >2 decimals', function () {
+  /* Percentages are not money: no $, no thousands separator, and more than
+     two decimals is legitimate (33.333%). But junk must not parse. */
+  var ok = TCSCalc.computePayments({
+    packagePrice: '2500', depositType: 'percent', depositPercent: '33.333',
+    depositAmount: '0', totalPayments: '4', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(ok.ok, true, '33.333% should be accepted: ' + ok.error);
+
+  ['150abc', '20%', '1,0', '1e2', 'abc'].forEach(function (v) {
+    var p = TCSCalc.computePayments({
+      packagePrice: '2500', depositType: 'percent', depositPercent: v,
+      depositAmount: '0', totalPayments: '4', firstMatchesDeposit: 'no'
+    });
+    assert.strictEqual(p.ok, false,
+      'percentage accepted junk ' + JSON.stringify(v) + ' (parsed silently)');
+  });
+});
+
+unit('parsePercent is exported and shared by both percentage fields', function () {
+  assert.strictEqual(typeof TCSCalc.parsePercent, 'function', 'parsePercent not exported');
+  assert.strictEqual(TCSCalc.parsePercent('33.333'), 33.333);
+  assert.strictEqual(TCSCalc.parsePercent('20'), 20);
+  assert.ok(isNaN(TCSCalc.parsePercent('150abc')), '150abc should be NaN');
+  assert.ok(isNaN(TCSCalc.parsePercent('1,0')), '1,0 should be NaN');
+  assert.ok(isNaN(TCSCalc.parsePercent('')), 'empty should be NaN');
+
+  /* The partial tab's percentage must use the same rule. */
+  var r = TCSCalc.computePartialRefund({
+    packageCount: '1', tpp: '0', nonRefundPercent: '150abc', amountPaid: '100',
+    packages: [{ price: '1000', selected: true }]
+  });
+  assert.strictEqual(r.ok, false, 'partial accepted junk percentage');
 });
 
 unit('bounds constants match the documented thresholds', function () {

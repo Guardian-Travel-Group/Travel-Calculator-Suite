@@ -8,14 +8,13 @@
  * PORTING RULES OBSERVED (do not "improve" these without a policy decision):
  *   1. Function names, order, operation order and rounding points mirror the HTA
  *      one-for-one so this file stays easy to diff against the original.
- *   2. The HTA's *inconsistent* input parsing is preserved deliberately:
- *        - Payment Calculator  -> parseFloat / parseInt  (permissive, prefix parsing)
- *        - Refund Calculator   -> parseFloat             (permissive, prefix parsing)
- *        - Partial Refunds     -> parseMoney (strict) for TPP / Amount Paid / prices,
- *                                 parseFloat for the non-refundable percentage,
- *                                 parseInt for the package count
- *      Changing any of these would change staff-visible results, so parity wins.
- *      See web/README.md "Known legacy behaviours" before touching this.
+ *   2. Input parsing is UNIFORM by field type, applied identically in the HTA:
+ *        - money fields       -> parseMoney   (strips $ and commas, max 2dp)
+ *        - percentage fields  -> parsePercent (no $/commas, unlimited decimals)
+ *        - counts             -> parseInt
+ *      The HTA originally used bare parseFloat on the Payment and Refund tabs,
+ *      so "4,250" silently became 4. That was a defect, fixed in both builds
+ *      together. See web/README.md "Money and percentage parsing".
  *   3. All validation checks keep their original ORDER and exact message text,
  *      because the first failing check decides which message staff see.
  *   4. Monetary rounding uses the HTA's own helpers (roundMoney / moneyToCents)
@@ -79,6 +78,18 @@
     return parseFloat(text);
   }
 
+  /* [HTA 291-303]
+     Percentages are not money: no currency symbol, no thousands separator,
+     and more than two decimals is legitimate (33.333%). But parseFloat
+     ("150abc") returns 150, the same silent-garbage problem parseMoney fixes
+     for dollar fields, so percentages get their own strict parser. */
+  function parsePercent(value) {
+    var text = String(value == null ? "" : value);
+    text = text.replace(/\s/g, "");
+    if (text === "" || !/^-?\d*(\.\d*)?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;
+    return parseFloat(text);
+  }
+
   /* [HTA 275-280] */
   function formatSignedMoney(value) {
     var amount = roundMoney(value);
@@ -139,13 +150,14 @@
    * -------------------------------------------------------------------- */
 
   /* [HTA 411-440] getDepositAmount().
-     NOTE: the HTA reads the deposit fields with parseFloat, so "20abc" parses
-     as 20. Preserved. The non-finite guards reject "Infinity", which parseFloat
-     DOES return as a real Infinity and isNaN does not catch. */
+     Money fields use parseMoney, the percentage field uses parsePercent, so
+     "1,500" means 1500 and "150abc" is rejected rather than parsed as 150.
+     The non-finite guards remain: both parsers can still return a real
+     Infinity for "1e500", which isNaN does not catch. */
   function getDepositAmount(packagePrice, raw) {
     var depositType = raw.depositType;
-    var depositPercent = parseFloat(raw.depositPercent);
-    var depositAmountInput = parseFloat(raw.depositAmount);
+    var depositPercent = parsePercent(raw.depositPercent);
+    var depositAmountInput = parseMoney(raw.depositAmount);
 
     if (depositType === "percent") {
       if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
@@ -186,7 +198,7 @@
      package price is rejected first and the over-cap count stays as typed).
      app.js writes the field before its own !ok guard, so the two agree. */
   function computePayments(raw) {
-    var packagePrice = parseFloat(raw.packagePrice);
+    var packagePrice = parseMoney(raw.packagePrice);
     var totalPayments = parseInt(raw.totalPayments, 10);
     var firstMatches = raw.firstMatchesDeposit === "yes";
     var clampedPaymentCount = null;
@@ -344,9 +356,9 @@
      `now` is injectable only so tests can freeze the clock; the app passes
      nothing and gets new Date() exactly like the HTA. */
   function computeRefund(raw, now) {
-    var totalCost = parseFloat(raw.totalCost);
-    var amountPaid = parseFloat(raw.amountPaid);
-    var tpp = parseFloat(raw.tpp);
+    var totalCost = parseMoney(raw.totalCost);
+    var amountPaid = parseMoney(raw.amountPaid);
+    var tpp = parseMoney(raw.tpp);
 
     /* [HTA 572-583] */
     if (isNaN(totalCost) || isNaN(amountPaid) || isNaN(tpp)) {
@@ -417,7 +429,7 @@
   function computePartialRefund(raw) {
     var count = parseInt(raw.packageCount, 10);
     var tppEach = parseMoney(raw.tpp);
-    var nonRefundPercent = parseFloat(raw.nonRefundPercent);
+    var nonRefundPercent = parsePercent(raw.nonRefundPercent);
     var amountPaid = parseMoney(raw.amountPaid);
     var entries = raw.packages || [];
     var prices = [];
@@ -587,6 +599,7 @@
     formatMoney: formatMoney,
     formatSignedMoney: formatSignedMoney,
     parseMoney: parseMoney,
+    parsePercent: parsePercent,
     escapeHtml: escapeHtml,
     moneyToCents: moneyToCents,
     centsToMoney: centsToMoney,
