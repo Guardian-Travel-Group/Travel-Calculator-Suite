@@ -149,7 +149,7 @@
    * 1) Payment Calculator
    * -------------------------------------------------------------------- */
 
-  /* [HTA 411-440] getDepositAmount().
+  /* [HTA 421-485] getDepositAmount().
      Money fields use parseMoney, the percentage field uses parsePercent, so
      "1,500" means 1500 and "150abc" is rejected rather than parsed as 150.
      The non-finite guards remain: both parsers can still return a real
@@ -159,29 +159,68 @@
     var depositPercent = parsePercent(raw.depositPercent);
     var depositAmountInput = parseMoney(raw.depositAmount);
 
+    /* [HTA 426-439]
+       Upper bound on the deposit. Every other check here is a LOWER bound, so
+       nothing stopped a deposit above the package price from producing a
+       negative balance and negative scheduled payments.
+
+       The limit depends on how Payment 1 is treated, because the schedule
+       subtracts the deposit TWICE when Payment 1 mirrors it ([HTA 518]:
+       price - deposit - firstPayment, where firstPayment === deposit).
+       Bounding the deposit alone is therefore NOT sufficient on that path.
+         Payment 1 matches deposit = No  ->  deposit may be up to the full price
+         Payment 1 matches deposit = Yes ->  deposit may be up to half the price
+       Equal to the limit is allowed: paying in full up front is legitimate and
+       leaves a zero balance, not a negative one. */
+    var firstMatchesDeposit = raw.firstMatchesDeposit === "yes";
+    var maxDeposit = firstMatchesDeposit ? packagePrice / 2 : packagePrice;
+
     if (depositType === "percent") {
       if (isNaN(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
-      /* [HTA 416] */
+      /* [HTA 428] */
       if (!isFiniteNumber(depositPercent)) return { ok: false, message: "Please enter a valid deposit percentage." };
       if (depositPercent < 0) return { ok: false, message: "Deposit percentage cannot be negative." };
+      /* [HTA 444-452]
+         Bound the COMPUTED amount, not the raw percentage, so one rule covers
+         both 150% and a percentage that only overshoots on the Payment 1 path. */
+      var percentAmount = roundToDollar(packagePrice * (depositPercent / 100));
+      if (percentAmount > maxDeposit) {
+        return {
+          ok: false,
+          message: firstMatchesDeposit
+            ? "Deposit works out to more than half the package price, which it cannot be when Payment 1 matches the deposit. Lower the percentage, or set Payment 1 matches deposit to No."
+            : "Deposit works out to more than the package price. Check the percentage for an extra digit."
+        };
+      }
       return {
         ok: true,
-        amount: roundToDollar(packagePrice * (depositPercent / 100)),
+        amount: percentAmount,
         label: "Deposit percentage",
         valueText: depositPercent + "%"
       };
     }
 
     if (isNaN(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
-    /* [HTA 427] */
+    /* [HTA 464] */
     if (!isFiniteNumber(depositAmountInput)) return { ok: false, message: "Please enter a valid deposit dollar amount." };
     if (depositAmountInput < 0) return { ok: false, message: "Deposit amount cannot be negative." };
 
+    /* [HTA 468-476] */
+    var amountDeposit = roundToDollar(depositAmountInput);
+    if (amountDeposit > maxDeposit) {
+      return {
+        ok: false,
+        message: firstMatchesDeposit
+          ? "Deposit cannot be more than half the package price when Payment 1 matches the deposit. Lower the deposit, or set Payment 1 matches deposit to No."
+          : "Deposit cannot be more than the package price. Check for an extra zero, or switch to a deposit percentage."
+      };
+    }
+
     return {
       ok: true,
-      amount: roundToDollar(depositAmountInput),
+      amount: amountDeposit,
       label: "Deposit amount",
-      valueText: formatMoney(roundToDollar(depositAmountInput)) + " (rounded to nearest dollar)"
+      valueText: formatMoney(amountDeposit) + " (rounded to nearest dollar)"
     };
   }
 

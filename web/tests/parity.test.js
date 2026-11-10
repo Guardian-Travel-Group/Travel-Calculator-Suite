@@ -688,6 +688,40 @@ var OVERFLOW = '9'.repeat(400);
   checkPartial('partial: digit-overflow ' + c[0], partialRaw(c[1]));
 });
 
+/* ---- deposit upper bound: HTA/port parity across the boundary ----
+   The boundary differs by path: deposit <= price when Payment 1 does not
+   match the deposit, deposit <= price/2 when it does (the yes-path subtracts
+   the deposit twice). Both builds must agree on every side of both. */
+['no', 'yes'].forEach(function (fm) {
+  ['0', '1', '200', '499', '500', '501', '999', '1000', '1001', '5000', '1000000'
+  ].forEach(function (dep) {
+    checkPayments('payments: deposit $' + dep + ' firstMatches=' + fm,
+      payRaw({ packagePrice: '1000', depositType: 'amount', depositAmount: dep,
+               firstMatchesDeposit: fm }));
+  });
+  ['0', '20', '49.5', '50', '50.5', '51', '99', '100', '101', '150', '1000'
+  ].forEach(function (pct) {
+    checkPayments('payments: deposit ' + pct + '% firstMatches=' + fm,
+      payRaw({ packagePrice: '1000', depositType: 'percent', depositPercent: pct,
+               firstMatchesDeposit: fm }));
+  });
+  /* A zero-price package: the bound must not divide by it or reject 0%. */
+  ['0', '1'].forEach(function (dep) {
+    checkPayments('payments: zero price, deposit $' + dep + ' fm=' + fm,
+      payRaw({ packagePrice: '0', depositType: 'amount', depositAmount: dep,
+               firstMatchesDeposit: fm }));
+  });
+  /* One payment, deposit == price: the degenerate schedule. */
+  checkPayments('payments: 1 payment, deposit == price, fm=' + fm,
+    payRaw({ packagePrice: '1000', depositType: 'amount', depositAmount: '1000',
+             totalPayments: '1', firstMatchesDeposit: fm }));
+  /* The bound must be reported only after the clamp, like every other
+     post-clamp error, so the field still corrects to 120. */
+  checkPayments('payments: over-cap count + deposit over price, fm=' + fm,
+    payRaw({ packagePrice: '1000', depositType: 'amount', depositAmount: '5000',
+             totalPayments: '999999999', firstMatchesDeposit: fm }));
+});
+
 /* =====================================================================
  * 4) UNIT-LEVEL INVARIANTS (independent of the HTA comparison)
  * =================================================================== */
@@ -1032,6 +1066,137 @@ unit('parsePercent is exported and shared by both percentage fields', function (
     packages: [{ price: '1000', selected: true }]
   });
   assert.strictEqual(r.ok, false, 'partial accepted junk percentage');
+});
+
+/* ---- deposit upper bound (defect 2) ----
+   These assert what the code SHOULD do, so they fail while no upper bound
+   exists. Parity scenarios cannot catch this either: both builds share the
+   defect, so they agree while both produce negative schedules. */
+
+unit('deposit above the package price is rejected (dollar mode)', function () {
+  var p = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'amount', depositAmount: '5000',
+    depositPercent: '20', totalPayments: '6', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, false, '$5000 deposit on a $1000 package was accepted');
+  assert.ok(/more than the package price/i.test(p.error || ''),
+    'unexpected message: ' + p.error);
+});
+
+unit('deposit above the package price is rejected (percent mode)', function () {
+  /* The bound is on the COMPUTED amount, so 150% is caught by the same rule
+     rather than needing a separate pct > 100 check. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'percent', depositPercent: '150',
+    depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, false, '150% deposit was accepted');
+  assert.ok(/more than 100%|more than the package price/i.test(p.error || ''),
+    'unexpected message: ' + p.error);
+});
+
+unit('deposit exactly equal to the package price is legal', function () {
+  /* Paying in full up front is real. Balance zero, no negative payments. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'amount', depositAmount: '1000',
+    depositPercent: '20', totalPayments: '6', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, true, 'deposit == price rejected: ' + p.error);
+  assert.strictEqual(p.remainder, 0, 'expected a zero balance, got ' + p.remainder);
+  p.schedule.payments.forEach(function (v) {
+    assert.ok(v >= 0, 'negative payment in a paid-in-full schedule: ' + v);
+  });
+
+  /* 100% is the same thing expressed as a percentage. */
+  var q = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'percent', depositPercent: '100',
+    depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(q.ok, true, '100% deposit rejected: ' + q.error);
+  assert.strictEqual(q.remainder, 0);
+});
+
+unit('Payment 1 matching the deposit needs its own guard at half the price', function () {
+  /* [HTA 514-520] the yes-path subtracts the deposit TWICE - once as the
+     deposit, once as Payment 1 - so bounding deposit <= price is NOT enough.
+     Break-even is deposit <= price/2. */
+  var over = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'amount', depositAmount: '501',
+    depositPercent: '20', totalPayments: '6', firstMatchesDeposit: 'yes'
+  });
+  assert.strictEqual(over.ok, false,
+    '$501 deposit with Payment 1 matching on a $1000 package was accepted');
+  assert.ok(/half the package price/i.test(over.error || ''),
+    'unexpected message: ' + over.error);
+
+  /* Exactly half is the boundary and must stay legal. */
+  var at = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'amount', depositAmount: '500',
+    depositPercent: '20', totalPayments: '6', firstMatchesDeposit: 'yes'
+  });
+  assert.strictEqual(at.ok, true, 'exactly half rejected: ' + at.error);
+  assert.strictEqual(at.remainder, 0);
+
+  /* 50% with Payment 1 matching: same boundary, expressed as a percentage. */
+  var pct50 = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'percent', depositPercent: '50',
+    depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'yes'
+  });
+  assert.strictEqual(pct50.ok, true, '50% with Payment 1 matching rejected: ' + pct50.error);
+
+  /* 51% must fail on the yes-path but remain fine on the no-path. */
+  var pct51yes = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'percent', depositPercent: '51',
+    depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'yes'
+  });
+  assert.strictEqual(pct51yes.ok, false, '51% with Payment 1 matching was accepted');
+  var pct51no = TCSCalc.computePayments({
+    packagePrice: '1000', depositType: 'percent', depositPercent: '51',
+    depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(pct51no.ok, true, '51% without Payment 1 matching rejected: ' + pct51no.error);
+
+  /* 100% and deposit == price must fail on the yes-path: paying twice. */
+  ['100'].forEach(function (v) {
+    var r = TCSCalc.computePayments({
+      packagePrice: '1000', depositType: 'percent', depositPercent: v,
+      depositAmount: '500', totalPayments: '6', firstMatchesDeposit: 'yes'
+    });
+    assert.strictEqual(r.ok, false, v + '% with Payment 1 matching was accepted');
+  });
+});
+
+unit('no schedule anywhere contains a negative payment', function () {
+  /* The property the bound exists to guarantee. Sweep the whole space. */
+  ['0', '1', '200', '499', '500', '501', '999', '1000', '1001', '5000'].forEach(function (dep) {
+    ['no', 'yes'].forEach(function (fm) {
+      var p = TCSCalc.computePayments({
+        packagePrice: '1000', depositType: 'amount', depositAmount: dep,
+        depositPercent: '20', totalPayments: '6', firstMatchesDeposit: fm
+      });
+      if (!p.ok) return;
+      assert.ok(p.remainder >= 0,
+        'negative balance accepted: deposit=' + dep + ' firstMatches=' + fm +
+        ' remainder=' + p.remainder);
+      (p.schedule ? p.schedule.payments : []).forEach(function (v) {
+        assert.ok(v >= 0, 'negative payment: deposit=' + dep + ' firstMatches=' + fm + ' -> ' + v);
+      });
+    });
+  });
+  ['0', '20', '50', '51', '100', '150'].forEach(function (pct) {
+    ['no', 'yes'].forEach(function (fm) {
+      var p = TCSCalc.computePayments({
+        packagePrice: '1000', depositType: 'percent', depositPercent: pct,
+        depositAmount: '500', totalPayments: '6', firstMatchesDeposit: fm
+      });
+      if (!p.ok) return;
+      assert.ok(p.remainder >= 0,
+        'negative balance accepted: pct=' + pct + ' firstMatches=' + fm);
+      (p.schedule ? p.schedule.payments : []).forEach(function (v) {
+        assert.ok(v >= 0, 'negative payment: pct=' + pct + ' firstMatches=' + fm + ' -> ' + v);
+      });
+    });
+  });
 });
 
 unit('bounds constants match the documented thresholds', function () {

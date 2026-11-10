@@ -174,6 +174,38 @@ var FAULTS = [
     find: 'if (text === "" || !/^-?\\d*(\\.\\d{0,2})?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;',
     replace: 'if (text === "" || !/^-?\\d*(\\.\\d{0,3})?$/.test(text) || text === "." || text === "-" || text === "-.") return NaN;',
     note: 'the documented 2dp money rule must be enforced'
+  },
+  {
+    id: 'drop-deposit-upper-bound',
+    label: 'remove the deposit upper bound entirely',
+    file: 'web/assets/js/calc.js',
+    find: '      if (percentAmount > maxDeposit) {',
+    replace: '      if (false && percentAmount > maxDeposit) {',
+    note: 'reintroduces negative schedules from an over-large percentage'
+  },
+  {
+    id: 'drop-deposit-bound-dollar',
+    label: 'remove the deposit upper bound (dollar mode)',
+    file: 'web/assets/js/calc.js',
+    find: '    if (amountDeposit > maxDeposit) {',
+    replace: '    if (false && amountDeposit > maxDeposit) {',
+    note: "reintroduces the $5,000-on-a-$1,000-package negative schedule"
+  },
+  {
+    id: 'deposit-bound-ignores-first-payment',
+    label: 'bound the deposit at full price even when Payment 1 mirrors it',
+    file: 'web/assets/js/calc.js',
+    find: '    var maxDeposit = firstMatchesDeposit ? packagePrice / 2 : packagePrice;',
+    replace: '    var maxDeposit = packagePrice;',
+    note: 'the yes-path subtracts the deposit twice, so price/2 is the real limit'
+  },
+  {
+    id: 'deposit-bound-off-by-one',
+    label: 'reject a deposit EQUAL to the limit (>= instead of >)',
+    file: 'web/assets/js/calc.js',
+    find: '    if (amountDeposit > maxDeposit) {',
+    replace: '    if (amountDeposit >= maxDeposit) {',
+    note: 'paying in full up front is legal and must stay legal'
   }
 ];
 
