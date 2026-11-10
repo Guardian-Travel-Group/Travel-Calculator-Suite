@@ -17,23 +17,29 @@ function summaryRows(rows) {
   }).join('');
 }
 
+/* Mirrors app.js exactly: the clamp is written back whenever calc.js reports
+   one, regardless of whether the call succeeded. Error paths must therefore
+   report the clamped field too, or the harness cannot see a write-back bug on
+   an error path. */
+function clampedField(reported, rawValue) {
+  return (reported !== null && reported !== undefined)
+    ? String(reported)
+    : String(rawValue);
+}
+
 /* [HTA 466-500] */
 function renderPayments(raw) {
   var res = TCSCalc.computePayments(raw);
+  var field = clampedField(res.clampedPaymentCount, raw.totalPayments);
+
   if (!res.ok) {
-    return { error: res.error, summary: '', results: '', totalPaymentsField: String(raw.totalPayments) };
+    return { error: res.error, summary: '', results: '', totalPaymentsField: field };
   }
 
   var results = res.lines.map(function (line) {
     var note = line.adjusted ? ' <span class="adjustedNote">(final adjusted)</span>' : '';
     return '<div class="lineItem"><strong>' + line.label + ':</strong> ' + formatMoney(line.amount) + note + '</div>';
   }).join('');
-
-  /* The HTA writes a clamped count back into the field; replicate that here so
-     the comparison covers the visible side effect, not just the numbers. */
-  var field = (res.clampedPaymentCount !== null && res.clampedPaymentCount !== undefined)
-    ? String(res.clampedPaymentCount)
-    : String(raw.totalPayments);
 
   return { error: '', summary: summaryRows(res.summary), results: results, totalPaymentsField: field };
 }
@@ -56,13 +62,11 @@ function renderRefund(raw, now) {
 /* [HTA 721-746] */
 function renderPartialRefund(raw) {
   var res = TCSCalc.computePartialRefund(raw);
-  if (!res.ok) {
-    return { error: res.error, summary: '', results: '', packageCountField: String(raw.packageCount) };
-  }
+  var field = clampedField(res.clampedPackageCount, raw.packageCount);
 
-  var field = (res.clampedPackageCount !== null && res.clampedPackageCount !== undefined)
-    ? String(res.clampedPackageCount)
-    : String(raw.packageCount);
+  if (!res.ok) {
+    return { error: res.error, summary: '', results: '', packageCountField: field };
+  }
 
   var results = '';
   res.packages.forEach(function (pkg) {

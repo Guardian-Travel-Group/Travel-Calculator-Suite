@@ -176,31 +176,49 @@
   /* [HTA 449-560] calculatePayments().
      Input: raw strings exactly as they come off the form controls.
      Output: { ok:false, error } or a structured result for the renderer.
-     When the count is clamped, `clampedPaymentCount` carries the new value so
-     the UI can write it back into the field exactly as the HTA does. */
+
+     CLAMP REPORTING CONTRACT — the HTA clamps and writes the field BEFORE the
+     deposit is validated, so a clamp followed by a deposit error still leaves
+     the corrected count on screen. `clampedPaymentCount` is therefore carried
+     on EVERY return that happens at or after the clamp point, success or
+     failure. Returns that happen BEFORE the clamp point report null, because
+     the HTA has not written the field at that stage either (e.g. a negative
+     package price is rejected first and the over-cap count stays as typed).
+     app.js writes the field before its own !ok guard, so the two agree. */
   function computePayments(raw) {
     var packagePrice = parseFloat(raw.packagePrice);
     var totalPayments = parseInt(raw.totalPayments, 10);
     var firstMatches = raw.firstMatchesDeposit === "yes";
     var clampedPaymentCount = null;
 
+    /* Error return for checks that run BEFORE the clamp. */
+    function failEarly(message) {
+      return { ok: false, error: message, clampedPaymentCount: null };
+    }
+    /* Error return for checks that run AFTER the clamp; carries the clamp so
+       the UI still corrects the field, exactly as the HTA does. */
+    function failAfterClamp(message) {
+      return { ok: false, error: message, clampedPaymentCount: clampedPaymentCount };
+    }
+
     /* [HTA 458-485] validation order is load-bearing */
     if (isNaN(packagePrice) || isNaN(totalPayments)) {
-      return { ok: false, error: "Please enter valid numbers." };
+      return failEarly("Please enter valid numbers.");
     }
     /* [HTA 462-466] isNaN misses Infinity, which would reach the arithmetic
        and render "$Infinity"/"$NaN" amounts. Reject non-finite explicitly. */
     if (!isFiniteNumber(packagePrice) || !isFiniteNumber(totalPayments)) {
-      return { ok: false, error: "Please enter valid numbers." };
+      return failEarly("Please enter valid numbers.");
     }
     if (packagePrice < 0) {
-      return { ok: false, error: "Package price cannot be negative." };
+      return failEarly("Package price cannot be negative.");
     }
     if (totalPayments < 1) {
-      return { ok: false, error: "Number of payments must be at least 1." };
+      return failEarly("Number of payments must be at least 1.");
     }
     /* [HTA 475-479] Silently clamp an over-large count, matching how the
-       Partial Package Refunds tab already clamps the package count to 50. */
+       Partial Package Refunds tab already clamps the package count to 50.
+       The HTA writes the field here, before the deposit check below. */
     if (totalPayments > MAX_PAYMENTS) {
       totalPayments = MAX_PAYMENTS;
       clampedPaymentCount = MAX_PAYMENTS;
@@ -208,7 +226,8 @@
 
     var depositInfo = getDepositAmount(packagePrice, raw);
     if (!depositInfo.ok) {
-      return { ok: false, error: depositInfo.message };
+      /* [HTA 483-487] runs AFTER the clamp */
+      return failAfterClamp(depositInfo.message);
     }
 
     var deposit = depositInfo.amount;
@@ -388,7 +407,13 @@
        paid first. Any amount above total TPP is allocated proportionally by
        package price. Each package is calculated independently from the same
        formula so two packages with the same price always receive the same
-       estimated paid amount/refund. */
+       estimated paid amount/refund.
+
+     CLAMP REPORTING CONTRACT — the HTA clamps and writes the field very early,
+     before the negative / percentage / price / overpay checks, so every one of
+     those errors still leaves the corrected count on screen.
+     `clampedPackageCount` is carried on all of those returns. Only the two
+     isNaN/non-finite checks run before the clamp and report null. */
   function computePartialRefund(raw) {
     var count = parseInt(raw.packageCount, 10);
     var tppEach = parseMoney(raw.tpp);
@@ -407,28 +432,36 @@
     var i = 0;
     var clampedPackageCount = null;
 
+    function failEarly(message) {
+      return { ok: false, error: message, clampedPackageCount: null };
+    }
+    function failAfterClamp(message) {
+      return { ok: false, error: message, clampedPackageCount: clampedPackageCount };
+    }
+
     /* [HTA 686-712] validation order is load-bearing */
     if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid)) {
-      return { ok: false, error: "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices." };
+      return failEarly("Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.");
     }
     /* [HTA 691-697] isNaN misses Infinity; a non-finite count would also drive
        the allocation loop below without end. */
     if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid)) {
-      return { ok: false, error: "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices." };
+      return failEarly("Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.");
     }
     /* [HTA 698-706] The allocation loop below runs `count` times regardless of
        how many price rows exist, so the 50-package ceiling must be enforced
        HERE as well as in updatePartialPackageInputs. Without this, a pasted
-       count of 50,000,000 stalls the app for ~26 seconds with two rows. */
+       count of 50,000,000 stalls the app for ~26 seconds with two rows.
+       The HTA writes the field here, before all the checks that follow. */
     if (count > MAX_PACKAGES) {
       count = MAX_PACKAGES;
       clampedPackageCount = MAX_PACKAGES;
     }
     if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0) {
-      return { ok: false, error: "Negative values are not allowed." };
+      return failAfterClamp("Negative values are not allowed.");
     }
     if (nonRefundPercent > 100) {
-      return { ok: false, error: "Non-refundable percentage cannot be greater than 100%." };
+      return failAfterClamp("Non-refundable percentage cannot be greater than 100%.");
     }
 
     /* [HTA 662-675]
@@ -442,7 +475,8 @@
       if (!entry) continue;
       var price = parseMoney(entry.price);
       if (isNaN(price) || price < 0 || !isFiniteNumber(price)) {
-        return { ok: false, error: "Please enter a valid price for Package " + i + " (for example 4923.00 or 4,923.00)." };
+        /* runs AFTER the clamp */
+        return failAfterClamp("Please enter a valid price for Package " + i + " (for example 4923.00 or 4,923.00).");
       }
       prices.push(roundMoney(price));
       selected.push(!!entry.selected);
@@ -456,7 +490,8 @@
 
     /* [HTA 681-685] */
     if (amountPaid > tripValue) {
-      return { ok: false, error: "Amount Paid cannot be greater than the total trip value (package prices + TPP)." };
+      /* runs AFTER the clamp */
+      return failAfterClamp("Amount Paid cannot be greater than the total trip value (package prices + TPP).");
     }
 
     /* [HTA 691-708] allocation in whole cents */

@@ -81,8 +81,8 @@ both implementations over the same inputs, and asserts the resulting
 error / summary / results HTML is **identical string-for-string** — so a drift
 of one cent, one label, or one validation message fails the run.
 
-Current status: **329 passed, 0 failed** (313 scenarios compared against live
-HTA code + 16 unit invariants).
+Current status: **429 passed, 0 failed** (411 scenarios compared against live
+HTA code + 18 unit invariants).
 
 Coverage includes the three gates called out for review:
 
@@ -96,10 +96,11 @@ Coverage includes the three gates called out for review:
   ±1 cent; zero-price packages; the trip-value overpay guard at +1 cent.
 
 …and the bounded-count behaviour described below: the cap boundary (119 / 120 /
-121), the clamp write-back, `Infinity`, `-Infinity`, `NaN`, `1e500`, and huge
-finite values (`999999999`, `2147483647`).
+121), the clamp write-back on **both success and error paths**, `Infinity`,
+`-Infinity`, `NaN`, `1e500`, and huge finite values (`999999999`,
+`2147483647`).
 
-The harness was mutation-tested to confirm it is not vacuous. Six deliberate
+The harness was mutation-tested to confirm it is not vacuous. Ten deliberate
 breaks were each caught:
 
 | Injected fault | Failures |
@@ -110,9 +111,16 @@ breaks were each caught:
 | port package cap `50` → `49` (HTA left at 50) | 8 |
 | remove the port's non-finite payment guard | 4 |
 | **HTA** payment cap `120` → `130` (port left at 120) | 18 |
+| stop reporting the payment clamp on error returns | 32 |
+| stop reporting the package clamp on error returns | 35 |
+| harness ignores the clamp on error paths (hides the bug) | 31 |
+| report a clamp on a *pre*-clamp rejection | 40 |
 
-The last row matters: parity breaks whichever side drifts, so the two builds
-cannot silently diverge.
+Two rows matter especially. The **HTA** cap row shows parity breaks whichever
+side drifts, so the two builds cannot silently diverge. The *"harness ignores
+the clamp on error paths"* row is the round-2 blocker's own signature: before
+the fix the suite could not see it, and now hiding it in the test fails the
+run.
 
 ---
 
@@ -148,9 +156,40 @@ Both builds now enforce the same rules:
 The HTA writes the capped value back into the input field, so staff see the
 count change. The web build does the same: `calc.js` stays pure and reports the
 clamp via `clampedPaymentCount` / `clampedPackageCount`, and `app.js` performs
-the DOM write. The parity suite compares the resulting **field value** in
-addition to the rendered HTML, so a write-back present in one build but not the
-other fails the run.
+the DOM write.
+
+**Ordering matters, because the clamp precedes later validation.** The HTA
+clamps and writes the field *before* it validates the deposit (payments tab) or
+the amounts, percentage and prices (partial tab). So an over-cap count combined
+with some *other* invalid field still leaves the corrected count on screen. To
+match this, `calc.js` reports the clamp on **error returns as well as success**,
+and `app.js` writes the field **before** its `if (!res.ok) return` guard.
+
+The exact validation order is load-bearing and is mirrored in both builds:
+
+    calculatePayments:       isNaN -> non-finite -> price<0 -> count<1
+                             -> CLAMP -> deposit validation
+    calculatePartialRefund:  isNaN -> non-finite -> CLAMP -> negatives
+                             -> pct>100 -> per-package prices -> overpay
+
+One consequence worth knowing: a *negative package price* is rejected **before**
+the clamp runs, so an over-cap count stays as typed in that case. That is the
+HTA's behaviour and the port reproduces it, including the asymmetry. Returns
+before the clamp point report `null`; returns at or after it carry the clamped
+value.
+
+What the user sees when a count is clamped **and** another field is invalid:
+the clamped count in the field, the error message beneath it, and no results.
+When the count is clamped and everything else is valid: the clamped count and
+the results. `calculatePartialRefund` does not rebuild the package rows — that
+is the count field's own `updatePartialPackageInputs` handler, which clamps
+there too — so results are never suppressed on the clamped-but-valid path.
+
+The parity suite compares the resulting **field value** in addition to the
+rendered HTML, on **error paths as well as success paths**. An earlier revision
+only exercised the write-back where it already worked, which is how an
+error-path divergence shipped; the regression scenarios in sections 1c and 3c
+close that gap.
 
 ---
 

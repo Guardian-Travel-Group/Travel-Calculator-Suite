@@ -159,16 +159,18 @@
     setError(errorBox, '');
 
     var res = C.computePayments(readPaymentRaw());
+
+    /* The HTA clamps and writes the field BEFORE validating the deposit, so a
+       clamp plus a later error still corrects the count on screen. Write first,
+       then handle the error, or the field diverges from the HTA. calc.js
+       reports the clamp on error returns too; app.js does no arithmetic. */
+    if (res.clampedPaymentCount !== null && res.clampedPaymentCount !== undefined) {
+      byId('totalPayments').value = String(res.clampedPaymentCount);
+    }
+
     if (!res.ok) {
       setError(errorBox, res.error);
       return;
-    }
-
-    /* The HTA writes a clamped count back into the visible field
-       (byId("totalPayments").value = String(MAX_PAYMENTS)). Mirror that so the
-       two builds behave identically on screen, not just in the numbers. */
-    if (res.clampedPaymentCount !== null) {
-      byId('totalPayments').value = String(res.clampedPaymentCount);
     }
 
     renderSummary(summaryBox, res.summary);
@@ -322,16 +324,24 @@
     syncPackageSelectionStyles();
 
     var res = C.computePartialRefund(readPartialRaw());
-    if (!res.ok) {
-      setError(errorBox, res.error);
-      return;
+
+    /* The HTA clamps and writes the field very early, before the negative /
+       percentage / price / overpay checks, so a clamp plus any of those errors
+       still corrects the count on screen. Write first, then handle the error.
+
+       Deliberately does NOT rebuild the rows and does NOT return early: the
+       HTA's calculatePartialRefund only writes the field and carries on, and
+       the row list is maintained by the count field's own input handler
+       (updatePartialPackageInputs), which clamps there too. An earlier version
+       rebuilt rows and returned here, which suppressed the results the HTA
+       renders. User-visible contract, matched in both builds: the clamped count
+       appears in the field, and the error OR the results appear beneath it. */
+    if (res.clampedPackageCount !== null && res.clampedPackageCount !== undefined) {
+      byId('partialPackageCount').value = String(res.clampedPackageCount);
     }
 
-    /* Mirror the HTA's write-back of a clamped package count, then rebuild the
-       rows so the visible list matches the clamped count. */
-    if (res.clampedPackageCount !== null) {
-      byId('partialPackageCount').value = String(res.clampedPackageCount);
-      updatePartialPackageInputs();
+    if (!res.ok) {
+      setError(errorBox, res.error);
       return;
     }
 

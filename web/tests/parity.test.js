@@ -441,6 +441,113 @@ checkPartial('25 packages mixed selection', partialRaw({
 });
 
 /* =====================================================================
+ * 1c) CLAMP WRITE-BACK ON ERROR PATHS  (QA round-2 blocker)
+ *
+ * The clamp and the field write happen BEFORE later validation in the HTA, so
+ * an over-cap count combined with a *different* invalid field must still leave
+ * the corrected count on screen. Previously only successful paths exercised
+ * the write-back, which is exactly why this slipped through.
+ *
+ * Ordering in calculatePayments is load-bearing:
+ *   isNaN -> non-finite -> price<0 -> count<1 -> CLAMP -> deposit validation
+ * so a bad PRICE reports the count as typed (clamp not yet reached), while a
+ * bad DEPOSIT reports the clamped count. Both directions are asserted.
+ * =================================================================== */
+
+/* QA-Jim's exact reproduction. */
+checkPayments('JIM-1 over-cap + bad deposit type',
+  payRaw({ totalPayments: '999.99', depositType: 'weird', depositAmount: '$2500' }));
+
+/* Over-cap count + each class of deposit error (all AFTER the clamp). */
+[
+  ['bad deposit percent', { depositPercent: 'abc' }],
+  ['empty deposit percent', { depositPercent: '' }],
+  ['negative deposit percent', { depositPercent: '-1' }],
+  ['deposit percent > 100', { depositPercent: '101' }],
+  ['infinite deposit percent', { depositPercent: 'Infinity' }],
+  ['bad deposit amount', { depositType: 'amount', depositAmount: 'abc' }],
+  ['empty deposit amount', { depositType: 'amount', depositAmount: '' }],
+  ['negative deposit amount', { depositType: 'amount', depositAmount: '-5' }],
+  ['infinite deposit amount', { depositType: 'amount', depositAmount: 'Infinity' }],
+  ['deposit exceeds price', { depositType: 'amount', depositAmount: '999999' }],
+  ['malformed currency deposit', { depositType: 'amount', depositAmount: '$2,500.00.00' }],
+  ['unknown deposit type', { depositType: 'weird', depositAmount: '$2500' }]
+].forEach(function (c) {
+  ['121', '500', '999999999'].forEach(function (n) {
+    var raw = payRaw(c[1]);
+    raw.totalPayments = n;
+    checkPayments('over-cap n=' + n + ' + ' + c[0], raw);
+  });
+});
+
+/* Errors that are rejected BEFORE the clamp: the field must stay as typed. */
+[
+  ['negative price', { packagePrice: '-1' }],
+  ['non-finite price', { packagePrice: 'Infinity' }],
+  ['blank price', { packagePrice: '' }],
+  ['non-numeric price', { packagePrice: 'abc' }]
+].forEach(function (c) {
+  ['121', '500', '999999999'].forEach(function (n) {
+    var raw = payRaw(c[1]);
+    raw.totalPayments = n;
+    checkPayments('pre-clamp reject n=' + n + ' + ' + c[0], raw);
+  });
+});
+
+/* =====================================================================
+ * 3c) PARTIAL CLAMP WRITE-BACK ON ERROR PATHS  (QA round-2 blocker)
+ *
+ * Ordering in calculatePartialRefund:
+ *   isNaN -> non-finite -> CLAMP -> negatives -> pct>100 -> prices -> overpay
+ * so the clamp precedes every error below and all of them must report the
+ * clamped count.
+ * =================================================================== */
+
+/* QA-Jim's exact reproduction. */
+checkPartial('JIM-2 over-cap + negative paid + out-of-range pct',
+  partialRaw({ packageCount: '51', amountPaid: '-0.01', nonRefundPercent: '999.99',
+               packages: pkgs([['1000', true]]) }));
+
+[
+  ['negative tpp', { tpp: '-1', amountPaid: '1000' }],
+  ['negative amount paid', { amountPaid: '-0.01' }],
+  ['negative percentage', { nonRefundPercent: '-1', amountPaid: '1000' }],
+  ['percentage > 100', { nonRefundPercent: '150', amountPaid: '1000' }],
+  ['percentage 999.99', { nonRefundPercent: '999.99', amountPaid: '1000' }],
+  ['malformed price 3dp', { amountPaid: '1000', packages: pkgs([['1000.123', true]]) }],
+  ['malformed currency price', { amountPaid: '1000', packages: pkgs([['$1,000.00.00', true]]) }],
+  ['non-numeric price', { amountPaid: '1000', packages: pkgs([['abc', true]]) }],
+  ['negative price', { amountPaid: '1000', packages: pkgs([['-1', true]]) }],
+  ['infinite price', { amountPaid: '1000', packages: pkgs([['Infinity', true]]) }],
+  ['missing rows', { amountPaid: '1000', packages: [] }],
+  ['overpay beyond trip value', { amountPaid: '99999999' }]
+].forEach(function (c) {
+  ['51', '60', '50000000'].forEach(function (n) {
+    var raw = partialRaw(c[1]);
+    raw.packageCount = n;
+    if (!('packages' in c[1])) raw.packages = pkgs([['1000', true]]);
+    checkPartial('over-cap count=' + n + ' + ' + c[0], raw);
+  });
+});
+
+/* Rejected BEFORE the clamp: field stays as typed. */
+[
+  ['blank tpp', { tpp: '', amountPaid: '1000' }],
+  ['blank percentage', { nonRefundPercent: '', amountPaid: '1000' }],
+  ['blank amount paid', { amountPaid: '' }],
+  ['non-finite amount paid', { amountPaid: 'Infinity' }],
+  ['non-finite tpp', { tpp: 'Infinity', amountPaid: '1000' }],
+  ['non-finite percentage', { nonRefundPercent: 'Infinity', amountPaid: '1000' }]
+].forEach(function (c) {
+  ['51', '50000000'].forEach(function (n) {
+    var raw = partialRaw(c[1]);
+    raw.packageCount = n;
+    if (!('packages' in c[1])) raw.packages = pkgs([['1000', true]]);
+    checkPartial('pre-clamp reject count=' + n + ' + ' + c[0], raw);
+  });
+});
+
+/* =====================================================================
  * 2b) REFUND NON-FINITE GUARDS
  * =================================================================== */
 [
@@ -638,6 +745,46 @@ unit('partial refund clamps package count in the calculation', function () {
   assert.ok(r.ok, 'expected ok, got: ' + r.error);
   assert.strictEqual(r.count, TCSCalc.MAX_PACKAGES, 'count was not clamped');
   assert.strictEqual(r.clampedPackageCount, TCSCalc.MAX_PACKAGES);
+});
+
+unit('clamp is reported on error returns, not only success', function () {
+  /* The round-2 blocker: calc.js must report the clamp even when it fails,
+     so app.js can write the field before its !ok guard. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '2500', depositType: 'weird', depositAmount: '$2500',
+    depositPercent: '20', totalPayments: '999.99', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, false, 'expected a deposit error');
+  assert.strictEqual(p.clampedPaymentCount, TCSCalc.MAX_PAYMENTS,
+    'clamp not reported on a post-clamp error path');
+
+  var r = TCSCalc.computePartialRefund({
+    packageCount: '51', tpp: '481', nonRefundPercent: '999.99', amountPaid: '-0.01',
+    packages: [{ price: '1000', selected: true }]
+  });
+  assert.strictEqual(r.ok, false, 'expected a validation error');
+  assert.strictEqual(r.clampedPackageCount, TCSCalc.MAX_PACKAGES,
+    'clamp not reported on a post-clamp error path');
+});
+
+unit('pre-clamp rejections report no clamp', function () {
+  /* A negative price is rejected before the clamp runs, so the field must be
+     left as typed - the HTA behaves the same way. */
+  var p = TCSCalc.computePayments({
+    packagePrice: '-1', depositType: 'percent', depositPercent: '20',
+    depositAmount: '500', totalPayments: '999999999', firstMatchesDeposit: 'no'
+  });
+  assert.strictEqual(p.ok, false);
+  assert.strictEqual(p.clampedPaymentCount, null,
+    'reported a clamp that the HTA never applied');
+
+  var r = TCSCalc.computePartialRefund({
+    packageCount: '51', tpp: '481', nonRefundPercent: '20', amountPaid: '',
+    packages: [{ price: '1000', selected: true }]
+  });
+  assert.strictEqual(r.ok, false);
+  assert.strictEqual(r.clampedPackageCount, null,
+    'reported a clamp that the HTA never applied');
 });
 
 unit('bounds constants match the documented thresholds', function () {
