@@ -296,6 +296,7 @@
       packageCount: byId('partialPackageCount').value,
       tpp: byId('partialTpp').value,
       nonRefundPercent: byId('partialNonRefundPercent').value,
+      totalPackagePrice: byId('partialTotalPackagePrice').value,
       amountPaid: byId('partialAmountPaid').value,
       packages: readPackageEntries()
     };
@@ -465,6 +466,7 @@
     byId('partialPackageCount').value = d.packageCount;
     byId('partialTpp').value = d.tpp;
     byId('partialNonRefundPercent').value = d.nonRefundPercent;
+    byId('partialTotalPackagePrice').value = d.totalPackagePrice;
     byId('partialAmountPaid').value = d.amountPaid;
     setError(byId('errorBox3'), '');
     clear(byId('summaryBox3'));
@@ -476,7 +478,7 @@
 
   function initPartial() {
     byId('partialPackageCount').addEventListener('input', updatePartialPackageInputs);
-    ['partialTpp', 'partialNonRefundPercent', 'partialAmountPaid'].forEach(function (id) {
+    ['partialTpp', 'partialNonRefundPercent', 'partialTotalPackagePrice', 'partialAmountPaid'].forEach(function (id) {
       byId(id).addEventListener('input', calculatePartialRefund);
     });
     byId('btnCalcPartial').addEventListener('click', calculatePartialRefund);

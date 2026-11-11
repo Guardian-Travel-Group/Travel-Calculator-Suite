@@ -470,6 +470,7 @@
     var tppEach = parseMoney(raw.tpp);
     var nonRefundPercent = parsePercent(raw.nonRefundPercent);
     var amountPaid = parseMoney(raw.amountPaid);
+    var typedTotalPackagePrice = parseMoney(raw.totalPackagePrice);
     var entries = raw.packages || [];
     var prices = [];
     var selected = [];
@@ -490,16 +491,16 @@
       return { ok: false, error: message, clampedPackageCount: clampedPackageCount };
     }
 
-    /* [HTA 686-712] validation order is load-bearing */
-    if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid)) {
-      return failEarly("Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.");
+    /* [HTA 734-738] validation order is load-bearing */
+    if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid) || isNaN(typedTotalPackagePrice)) {
+      return failEarly("Please complete the package count, TPP, non-refundable percentage, total package price, amount paid, and all package prices.");
     }
-    /* [HTA 691-697] isNaN misses Infinity; a non-finite count would also drive
+    /* [HTA 739-745] isNaN misses Infinity; a non-finite count would also drive
        the allocation loop below without end. */
-    if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid)) {
-      return failEarly("Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.");
+    if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid) || !isFiniteNumber(typedTotalPackagePrice)) {
+      return failEarly("Please complete the package count, TPP, non-refundable percentage, total package price, amount paid, and all package prices.");
     }
-    /* [HTA 698-706] The allocation loop below runs `count` times regardless of
+    /* [HTA 746-753] The allocation loop below runs `count` times regardless of
        how many price rows exist, so the 50-package ceiling must be enforced
        HERE as well as in updatePartialPackageInputs. Without this, a pasted
        count of 50,000,000 stalls the app for ~26 seconds with two rows.
@@ -508,7 +509,7 @@
       count = MAX_PACKAGES;
       clampedPackageCount = MAX_PACKAGES;
     }
-    if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0) {
+    if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0 || typedTotalPackagePrice < 0) {
       return failAfterClamp("Negative values are not allowed.");
     }
     if (nonRefundPercent > 100) {
@@ -534,12 +535,27 @@
       totalPackagePrice += price;
     }
 
-    /* [HTA 677-679] */
+    /* [HTA 780-782] */
     totalPackagePrice = roundMoney(totalPackagePrice);
     totalTpp = roundMoney(tppEach * count);
     tripValue = roundMoney(totalPackagePrice + totalTpp);
 
-    /* [HTA 681-685] */
+    /* [HTA 784-799] The individual package price rows must add up to the typed
+       Total Package Price. Compared in integer CENTS against
+       `totalPackagePrice`, the same variable the allocation uses, so the check
+       and the math can never disagree; a float comparison would produce
+       phantom mismatches (1000.10 + 2000.20 + 3000.30 is 6000.599999999999).
+       The loop above SKIPS absent rows, so a blank row short-changes the sum
+       and lands here - hence the wording.
+       This is failAfterClamp, not failEarly: the package-count clamp must
+       still reach the field on this error path. */
+    if (moneyToCents(totalPackagePrice) !== moneyToCents(typedTotalPackagePrice)) {
+      return failAfterClamp("Package prices add up to " + formatMoney(totalPackagePrice) +
+        " but Total Package Price is " + formatMoney(typedTotalPackagePrice) +
+        ". Check the individual package prices, including any left blank.");
+    }
+
+    /* [HTA 801-805] */
     if (amountPaid > tripValue) {
       /* runs AFTER the clamp */
       return failAfterClamp("Amount Paid cannot be greater than the total trip value (package prices + TPP).");
@@ -622,11 +638,12 @@
     };
   }
 
-  /* [HTA 753-762] resetPartialRefund() defaults */
+  /* [HTA 871-880] resetPartialRefund() defaults */
   var PARTIAL_DEFAULTS = {
     packageCount: "5",
     tpp: "481",
     nonRefundPercent: "20",
+    totalPackagePrice: "",
     amountPaid: ""
   };
 

@@ -209,9 +209,31 @@ function pkgs(list) {
   });
 }
 
+/* `totalPackagePrice` defaults to the EXACT sum of the supplied package rows,
+   so every pre-existing scenario still reconciles and keeps testing what it
+   was written to test. Without this, a blank total would send ~45 scenarios
+   down the "please complete..." path and quietly delete their coverage.
+   Pass totalPackagePrice explicitly to exercise a mismatch. */
+function sumPackagePrices(list) {
+  var cents = 0;
+  (list || []).forEach(function (p) {
+    if (p === null || p === undefined) return;
+    var v = TCSCalc.parseMoney(p.price);
+    if (isNaN(v) || !isFinite(v)) return;
+    cents += Math.round(v * 100);
+  });
+  return (cents / 100).toFixed(2);
+}
+
 function partialRaw(over) {
-  var base = { packageCount: '5', tpp: '481', nonRefundPercent: '20', amountPaid: '', packages: [] };
+  var base = { packageCount: '5', tpp: '481', nonRefundPercent: '20',
+               totalPackagePrice: null, amountPaid: '', packages: [] };
   Object.keys(over || {}).forEach(function (k) { base[k] = over[k]; });
+  if (base.totalPackagePrice === null) {
+    base.totalPackagePrice = (base.packages && base.packages.length)
+      ? sumPackagePrices(base.packages)
+      : '';
+  }
   return base;
 }
 
@@ -722,6 +744,44 @@ var OVERFLOW = '9'.repeat(400);
              totalPayments: '999999999', firstMatchesDeposit: fm }));
 });
 
+/* ---- Total Package Price reconciliation: HTA/port parity ---- */
+[['exact', '6000.00'], ['one cent over', '6000.01'], ['one cent under', '5999.99'],
+ ['blank', ''], ['commas', '$6,000.00'], ['wildly wrong', '99999.00'],
+ ['zero', '0'], ['junk', '12abc'], ['negative', '-6000.00']
+].forEach(function (c) {
+  checkPartial('partial: total package price ' + c[0], partialRaw({
+    packageCount: '3', totalPackagePrice: c[1], amountPaid: '5000',
+    packages: pkgs([['1000.00', true], ['2000.00', true], ['3000.00', true]])
+  }));
+});
+/* Float-fragile sums that must reconcile in cents. */
+checkPartial('partial: float-fragile sum reconciles', partialRaw({
+  packageCount: '3', totalPackagePrice: '6000.60', amountPaid: '5000',
+  packages: pkgs([['1000.10', true], ['2000.20', true], ['3000.30', true]])
+}));
+checkPartial('partial: 0.10 + 0.20 reconciles with 0.30', partialRaw({
+  packageCount: '2', totalPackagePrice: '0.30', amountPaid: '0',
+  packages: pkgs([['0.10', true], ['0.20', true]])
+}));
+/* A blank row short-changes the sum. */
+checkPartial('partial: blank row breaks reconciliation', partialRaw({
+  packageCount: '3', totalPackagePrice: '6000.00', amountPaid: '5000',
+  packages: [{ price: '1000.00', selected: true }, undefined,
+             { price: '3000.00', selected: true }]
+}));
+/* Mismatch combined with an over-cap count: clamp must still write back. */
+checkPartial('partial: mismatch + over-cap count', partialRaw({
+  packageCount: '999999999', totalPackagePrice: '9999.00', amountPaid: '100',
+  packages: pkgs([['1000.00', true], ['2000.00', true], ['3000.00', true]])
+}));
+/* Amount Paid below / equal / above the package total, all reconciled. */
+[['below', '2500'], ['equal', '6000.00'], ['above', '7000.00']].forEach(function (c) {
+  checkPartial('partial: amount paid ' + c[0] + ' package total', partialRaw({
+    packageCount: '3', totalPackagePrice: '6000.00', amountPaid: c[1],
+    packages: pkgs([['1000.00', true], ['2000.00', true], ['3000.00', true]])
+  }));
+});
+
 /* =====================================================================
  * 4) UNIT-LEVEL INVARIANTS (independent of the HTA comparison)
  * =================================================================== */
@@ -860,6 +920,7 @@ unit('non-finite money input is rejected, never rendered', function () {
 unit('partial refund clamps package count in the calculation', function () {
   var r = TCSCalc.computePartialRefund({
     packageCount: '50000000', tpp: '481', nonRefundPercent: '20', amountPaid: '1000',
+    totalPackagePrice: '2000',
     packages: [{ price: '1000', selected: true }, { price: '1000', selected: false }]
   });
   assert.ok(r.ok, 'expected ok, got: ' + r.error);
@@ -883,6 +944,7 @@ unit('clamp is reported on error returns, not only success', function () {
 
   var r = TCSCalc.computePartialRefund({
     packageCount: '51', tpp: '481', nonRefundPercent: '999.99', amountPaid: '-0.01',
+    totalPackagePrice: '1000',
     packages: [{ price: '1000', selected: true }]
   });
   assert.strictEqual(r.ok, false, 'expected a validation error');
@@ -1015,6 +1077,7 @@ unit('money fields use one shared parser across all three tabs', function () {
        equals the parsed amount, when the package is the only one. */
     var par = TCSCalc.computePartialRefund({
       packageCount: '1', tpp: '0', nonRefundPercent: '0', amountPaid: v,
+      totalPackagePrice: '100000',
       packages: [{ price: '100000', selected: true }]
     });
     assert.strictEqual(par.ok, true, 'partial rejected ' + v);
@@ -1197,6 +1260,134 @@ unit('no schedule anywhere contains a negative payment', function () {
       });
     });
   });
+});
+
+/* ---- Total Package Price reconciliation (partial tab) ----
+   Assert the intended behaviour, so these fail until the rule exists. */
+
+unit('package prices must reconcile with the typed Total Package Price', function () {
+  function run(total, rows, extra) {
+    var raw = {
+      packageCount: String(rows.length), tpp: '481', nonRefundPercent: '20',
+      totalPackagePrice: total, amountPaid: '5000',
+      packages: rows.map(function (p) {
+        return p === null ? undefined : { price: p, selected: true };
+      })
+    };
+    Object.keys(extra || {}).forEach(function (k) { raw[k] = extra[k]; });
+    return TCSCalc.computePartialRefund(raw);
+  }
+
+  /* Exact match passes. */
+  var ok = run('6000.00', ['1000.00', '2000.00', '3000.00']);
+  assert.strictEqual(ok.ok, true, 'exact reconciliation rejected: ' + ok.error);
+  assert.strictEqual(ok.totalPackagePrice, 6000);
+
+  /* One cent over and one cent under must both fail. */
+  var over = run('6000.01', ['1000.00', '2000.00', '3000.00']);
+  assert.strictEqual(over.ok, false, 'one cent over was accepted');
+  assert.ok(/add up to/i.test(over.error || ''), 'unexpected message: ' + over.error);
+  assert.ok(/\$6,?000\.00/.test(over.error) && /\$6,?000\.01/.test(over.error),
+    'message must show BOTH figures, got: ' + over.error);
+
+  var under = run('5999.99', ['1000.00', '2000.00', '3000.00']);
+  assert.strictEqual(under.ok, false, 'one cent under was accepted');
+
+  /* Values that are exact at 2dp but awkward in binary floating point.
+     1000.10 + 2000.20 + 3000.30 === 6000.599999999999 as a float, so a
+     float comparison against 6000.60 produces a phantom mismatch. */
+  var floaty = run('6000.60', ['1000.10', '2000.20', '3000.30']);
+  assert.strictEqual(floaty.ok, true,
+    'float-fragile sum rejected (compare in cents, not floats): ' + floaty.error);
+
+  var floaty2 = TCSCalc.computePartialRefund({
+    packageCount: '2', tpp: '0', nonRefundPercent: '20',
+    totalPackagePrice: '0.30', amountPaid: '0.30',
+    packages: [{ price: '0.10', selected: true }, { price: '0.20', selected: true }]
+  });
+  assert.strictEqual(floaty2.ok, true, '0.10 + 0.20 must reconcile with 0.30: ' + floaty2.error);
+
+  /* A blank row makes the sum short, so it must not reconcile. */
+  var blank = run('6000.00', ['1000.00', null, '3000.00']);
+  assert.strictEqual(blank.ok, false, 'a missing package row still reconciled');
+  assert.ok(/blank|missing|every package/i.test(blank.error || ''),
+    'message should hint a row may be blank, got: ' + blank.error);
+
+  /* Commas and a dollar sign are accepted, like every other money field. */
+  var commas = run('$6,000.00', ['1000.00', '2000.00', '3000.00']);
+  assert.strictEqual(commas.ok, true, 'currency-formatted total rejected: ' + commas.error);
+
+  /* A blank total belongs in the existing "please complete..." early check. */
+  var blankTotal = run('', ['1000.00', '2000.00', '3000.00']);
+  assert.strictEqual(blankTotal.ok, false, 'blank total was accepted');
+  assert.ok(/please complete/i.test(blankTotal.error || ''),
+    'blank total should use the existing early message, got: ' + blankTotal.error);
+  assert.strictEqual(blankTotal.clampedPackageCount, null,
+    'blank total is an early failure and must not report a clamp');
+});
+
+unit('reconciliation error still writes back the package-count clamp', function () {
+  /* The mismatch is a failAfterClamp return: an over-cap count must still be
+     corrected on screen, per the clamp-reporting contract. */
+  var rows = [];
+  for (var i = 0; i < 3; i++) rows.push({ price: '1000.00', selected: true });
+  var res = TCSCalc.computePartialRefund({
+    packageCount: '999999999', tpp: '481', nonRefundPercent: '20',
+    totalPackagePrice: '9999.00', amountPaid: '100', packages: rows
+  });
+  assert.strictEqual(res.ok, false, 'mismatch was accepted');
+  assert.ok(/add up to/i.test(res.error || ''), 'expected the mismatch error, got: ' + res.error);
+  assert.strictEqual(res.clampedPackageCount, TCSCalc.MAX_PACKAGES,
+    'clamp was not reported on the reconciliation error path');
+});
+
+unit('partial payment keeps working once the total is reconciled', function () {
+  /* Amount Paid below / equal to / above the Total Package Price. Partial
+     payment is the normal case on this tab and must not be constrained by
+     the new field. */
+  function run(paid) {
+    return TCSCalc.computePartialRefund({
+      packageCount: '3', tpp: '481', nonRefundPercent: '20',
+      totalPackagePrice: '6000.00', amountPaid: paid,
+      packages: [{ price: '1000.00', selected: true },
+                 { price: '2000.00', selected: true },
+                 { price: '3000.00', selected: true }]
+    });
+  }
+  var less = run('2500');
+  assert.strictEqual(less.ok, true, 'paid < total package price rejected: ' + less.error);
+  var equal = run('6000.00');
+  assert.strictEqual(equal.ok, true, 'paid == total package price rejected: ' + equal.error);
+  /* Above the package total but still within trip value (prices + TPP). */
+  var more = run('7000.00');
+  assert.strictEqual(more.ok, true, 'paid > total package price rejected: ' + more.error);
+  /* Still bounded by the existing trip-value check. */
+  var tooMuch = run('999999');
+  assert.strictEqual(tooMuch.ok, false, 'overpay check was lost');
+  assert.ok(/total trip value/i.test(tooMuch.error || ''), 'wrong error: ' + tooMuch.error);
+});
+
+unit('the typed total does not drive the allocation', function () {
+  /* The rows stay authoritative. Because the two must match to get past
+     validation, the result is identical either way - this pins that the
+     allocation was not re-plumbed to read the typed field. */
+  var res = TCSCalc.computePartialRefund({
+    packageCount: '3', tpp: '0', nonRefundPercent: '0',
+    totalPackagePrice: '6000.00', amountPaid: '6000.00',
+    packages: [{ price: '1000.00', selected: true },
+               { price: '2000.00', selected: true },
+               { price: '3000.00', selected: true }]
+  });
+  assert.strictEqual(res.ok, true, res.error);
+  assert.strictEqual(res.totalPackagePrice, 6000);
+  assert.strictEqual(res.packages[0].allocatedPaid, 1000);
+  assert.strictEqual(res.packages[1].allocatedPaid, 2000);
+  assert.strictEqual(res.packages[2].allocatedPaid, 3000);
+});
+
+unit('PARTIAL_DEFAULTS carries the new field', function () {
+  assert.strictEqual(TCSCalc.PARTIAL_DEFAULTS.totalPackagePrice, '',
+    'Clear must reset Total Package Price');
 });
 
 unit('bounds constants match the documented thresholds', function () {

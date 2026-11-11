@@ -206,6 +206,41 @@ var FAULTS = [
     find: '    if (amountDeposit > maxDeposit) {',
     replace: '    if (amountDeposit >= maxDeposit) {',
     note: 'paying in full up front is legal and must stay legal'
+  },
+  {
+    id: 'drop-reconciliation-check',
+    label: 'drop the Total Package Price reconciliation check entirely',
+    file: 'web/assets/js/calc.js',
+    find: '    if (moneyToCents(totalPackagePrice) !== moneyToCents(typedTotalPackagePrice)) {',
+    replace: '    if (false) {',
+    note: 'package rows that do not add up to the typed total must not calculate'
+  },
+  {
+    /* NOTE: a 'compare in floats instead of cents' fault was written here and
+       REMOVED after being proven an EQUIVALENT MUTANT. Both sides of the
+       comparison are already normalised to 2dp before it runs - the left by
+       roundMoney(), the right by parseMoney(), which rejects a 3rd decimal.
+       IEEE-754 division is correctly rounded, so k/100 is the same double a
+       2dp literal parses to: verified over all 2,000,001 cent values from
+       $0.00 to $20,000.00, 400,000 random multi-row sums up to 1e8, and the
+       2^53 boundary - zero divergences. No scenario can separate the two
+       comparisons, so the fault could never be detected and would have left
+       the gate permanently red. The cents comparison is still the correct
+       code: it stays robust if the rounding above ever moves or is removed. */
+    id: 'reconciliation-wrong-variable',
+    label: 'reconcile against tripValue instead of totalPackagePrice',
+    file: 'web/assets/js/calc.js',
+    find: '    if (moneyToCents(totalPackagePrice) !== moneyToCents(typedTotalPackagePrice)) {',
+    replace: '    if (moneyToCents(tripValue) !== moneyToCents(typedTotalPackagePrice)) {',
+    note: 'the check must use the same variable the allocation uses'
+  },
+  {
+    id: 'reconciliation-fail-early',
+    label: 'make the reconciliation error failEarly, losing the clamp write-back',
+    file: 'web/assets/js/calc.js',
+    find: '      return failAfterClamp("Package prices add up to " + formatMoney(totalPackagePrice) +',
+    replace: '      return failEarly("Package prices add up to " + formatMoney(totalPackagePrice) +',
+    note: 'the package-count clamp must still reach the field on this error path'
   }
 ];
 

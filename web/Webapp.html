@@ -257,7 +257,14 @@
             </div>
 
             <div class="field">
-              <label for="partialAmountPaid">Total Amount Paid on Receipt</label>
+              <label for="partialTotalPackagePrice">Total Package Price</label>
+              <div class="input-money">
+                <input id="partialTotalPackagePrice" type="text" inputmode="decimal" autocomplete="off" value="" />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="partialAmountPaid">Amount Paid</label>
               <div class="input-money">
                 <input id="partialAmountPaid" type="text" inputmode="decimal" autocomplete="off" value="" />
               </div>
@@ -301,9 +308,13 @@
                   </ul>
                 </li>
                 <li>
-                  <h4>Amount Paid</h4>
+                  <h4>Total Package Price and Amount Paid</h4>
                   <ul>
-                    <li>Enter the total Amount Paid shown on the receipt</li>
+                    <li>Total Package Price is what the trip costs in total, from the receipt</li>
+                    <li>Amount Paid is what the participant has actually handed over so far</li>
+                    <li>Amount Paid is often less than the Total Package Price; that is normal</li>
+                    <li>The individual package prices below must add up to the Total Package Price</li>
+                    <li>If they do not match, the calculator shows both figures and stops, so check for a mistyped price or a package row left blank</li>
                   </ul>
                 </li>
                 <li>

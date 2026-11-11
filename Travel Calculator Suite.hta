@@ -715,6 +715,7 @@ function calculatePartialRefund() {
   var tppEach = parseMoney(byId("partialTpp").value);
   var nonRefundPercent = parsePercent(byId("partialNonRefundPercent").value);
   var amountPaid = parseMoney(byId("partialAmountPaid").value);
+  var typedTotalPackagePrice = parseMoney(byId("partialTotalPackagePrice").value);
   var prices = [];
   var selected = [];
   var allocatedPaid = [];
@@ -731,15 +732,15 @@ function calculatePartialRefund() {
   byId("summaryBox3").innerHTML = "";
   byId("resultsBox3").innerHTML = "";
 
-  if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid)) {
-    byId("errorBox3").innerHTML = "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.";
+  if (isNaN(count) || count < 1 || isNaN(tppEach) || isNaN(nonRefundPercent) || isNaN(amountPaid) || isNaN(typedTotalPackagePrice)) {
+    byId("errorBox3").innerHTML = "Please complete the package count, TPP, non-refundable percentage, total package price, amount paid, and all package prices.";
     setPanelHeights();
     return;
   }
   /* isNaN misses Infinity; a non-finite count would also drive the allocation
      loop below without end. */
-  if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid)) {
-    byId("errorBox3").innerHTML = "Please complete the package count, TPP, non-refundable percentage, amount paid, and all package prices.";
+  if (!isFiniteNumber(count) || !isFiniteNumber(tppEach) || !isFiniteNumber(nonRefundPercent) || !isFiniteNumber(amountPaid) || !isFiniteNumber(typedTotalPackagePrice)) {
+    byId("errorBox3").innerHTML = "Please complete the package count, TPP, non-refundable percentage, total package price, amount paid, and all package prices.";
     setPanelHeights();
     return;
   }
@@ -751,7 +752,7 @@ function calculatePartialRefund() {
     byId("partialPackageCount").value = String(MAX_PACKAGES);
     count = MAX_PACKAGES;
   }
-  if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0) {
+  if (tppEach < 0 || nonRefundPercent < 0 || amountPaid < 0 || typedTotalPackagePrice < 0) {
     byId("errorBox3").innerHTML = "Negative values are not allowed.";
     setPanelHeights();
     return;
@@ -780,6 +781,21 @@ function calculatePartialRefund() {
   totalPackagePrice = roundMoney(totalPackagePrice);
   totalTpp = roundMoney(tppEach * count);
   tripValue = roundMoney(totalPackagePrice + totalTpp);
+
+  /* The individual package price rows must add up to the typed Total Package
+     Price. Compared in integer CENTS against `totalPackagePrice`, the same
+     variable the allocation uses, so the check and the math can never
+     disagree; a float comparison here would produce phantom mismatches
+     (1000.10 + 2000.20 + 3000.30 is 6000.599999999999 as a float).
+     The loop above skips absent rows, so a blank row short-changes the sum
+     and lands here - hence the wording. */
+  if (moneyToCents(totalPackagePrice) !== moneyToCents(typedTotalPackagePrice)) {
+    byId("errorBox3").innerHTML = "Package prices add up to " + formatMoney(totalPackagePrice) +
+      " but Total Package Price is " + formatMoney(typedTotalPackagePrice) +
+      ". Check the individual package prices, including any left blank.";
+    setPanelHeights();
+    return;
+  }
 
   if (amountPaid > tripValue) {
     byId("errorBox3").innerHTML = "Amount Paid cannot be greater than the total trip value (package prices + TPP).";
@@ -857,6 +873,7 @@ function resetPartialRefund() {
   byId("partialPackageCount").value = "5";
   byId("partialTpp").value = "481";
   byId("partialNonRefundPercent").value = "20";
+  byId("partialTotalPackagePrice").value = "";
   byId("partialAmountPaid").value = "";
   byId("errorBox3").innerHTML = "";
   byId("summaryBox3").innerHTML = "";
@@ -1023,7 +1040,11 @@ Step 4: Calculate
               <input id="partialNonRefundPercent" type="text" value="20" onkeyup="calculatePartialRefund()" />
             </div>
             <div class="field">
-              <label for="partialAmountPaid">Total Amount Paid on Receipt</label>
+              <label for="partialTotalPackagePrice">Total Package Price</label>
+              <input id="partialTotalPackagePrice" type="text" value="" onkeyup="calculatePartialRefund()" />
+            </div>
+            <div class="field">
+              <label for="partialAmountPaid">Amount Paid</label>
               <input id="partialAmountPaid" type="text" value="" onkeyup="calculatePartialRefund()" />
             </div>
             <div id="partialPackageInputs"></div>
@@ -1045,8 +1066,13 @@ Step 2: TPP and Non-Refundable Percentage
 - Enter the non-refundable percentage
 - The percentage is applied separately to each package price
 
-Step 3: Amount Paid
-- Enter the total Amount Paid shown on the receipt
+Step 3: Total Package Price and Amount Paid
+- Total Package Price is what the trip costs in total, from the receipt
+- Amount Paid is what the participant has actually handed over so far
+- Amount Paid is often less than the Total Package Price; that is normal
+- The individual package prices in Step 4 must add up to the Total Package Price
+- If they do not match, the calculator shows both figures and stops, so check
+  for a mistyped price or a package row left blank
 
 Step 4: Package Prices
 - Enter each package's price without TPP

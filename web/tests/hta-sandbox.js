@@ -26,7 +26,8 @@ var STATIC_IDS = [
   'packagePrice', 'depositType', 'depositPercent', 'depositAmount', 'totalPayments',
   'firstMatchesDeposit', 'depositPercentWrap', 'depositAmountWrap',
   'refundTotalCost', 'refundAmountPaid', 'refundTpp',
-  'partialPackageCount', 'partialTpp', 'partialNonRefundPercent', 'partialAmountPaid',
+  'partialPackageCount', 'partialTpp', 'partialNonRefundPercent',
+  'partialTotalPackagePrice', 'partialAmountPaid',
   'partialPackageInputs'
 ];
 
@@ -154,6 +155,8 @@ function createSandbox(htaPath, options) {
     set('partialPackageCount', raw.packageCount);
     set('partialTpp', raw.tpp);
     set('partialNonRefundPercent', raw.nonRefundPercent);
+    set('partialTotalPackagePrice',
+      raw.totalPackagePrice === undefined ? '' : raw.totalPackagePrice);
     set('partialAmountPaid', raw.amountPaid);
     (raw.packages || []).forEach(function (pkg, idx) {
       if (pkg === null || pkg === undefined) return; /* reproduce a missing row */
