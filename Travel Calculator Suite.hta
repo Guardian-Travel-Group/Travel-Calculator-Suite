@@ -797,6 +797,21 @@ function calculatePartialRefund() {
     return;
   }
 
+  /* Number of Packages must match the rows actually priced. totalTpp is
+     tppEach * count, but the scan loop above SKIPS rows that do not exist
+     (`if (!priceInput) continue;`), so a count larger than the rendered rows
+     bills TPP for phantom packages that no row ever reconciles against. That
+     inflates the non-refundable base and silently UNDER-REFUNDS the customer
+     with no error shown (3 rows priced at $6000 with count=5 loses $962).
+     Placed after the reconciliation check so that error keeps precedence. */
+  if (prices.length !== count) {
+    byId("errorBox3").innerHTML = "Number of Packages is " + count + " but " + prices.length +
+      (prices.length === 1 ? " package price row is shown." : " package price rows are shown.") +
+      " Re-enter the Number of Packages so the rows match.";
+    setPanelHeights();
+    return;
+  }
+
   if (amountPaid > tripValue) {
     byId("errorBox3").innerHTML = "Amount Paid cannot be greater than the total trip value (package prices + TPP).";
     setPanelHeights();
@@ -1076,6 +1091,9 @@ Step 3: Total Package Price and Amount Paid
 
 Step 4: Package Prices
 - Enter each package's price without TPP
+- Number of Packages must match the number of package rows shown
+- If it does not, the calculator names both numbers and stops; re-enter the
+  Number of Packages so the rows match
 - Check the package or packages being removed
 
 Step 5: Calculate

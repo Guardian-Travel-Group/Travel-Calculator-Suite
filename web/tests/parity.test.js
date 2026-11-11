@@ -918,14 +918,26 @@ unit('non-finite money input is rejected, never rendered', function () {
 });
 
 unit('partial refund clamps package count in the calculation', function () {
+  /* The clamp must still be APPLIED and REPORTED inside the calculation.
+     This used to assert ok:true, which enshrined the phantom-TPP bug: a count
+     of 50,000,000 clamps to MAX_PACKAGES and, with only 2 priced rows, billed
+     481 x 50 = $24,050 of TPP for 2 packages and still rendered a result.
+     The clamp contract is unchanged (count clamped, clampedPackageCount
+     reported); what changed is that the count/rows desync is now an error
+     instead of a silent under-refund. */
   var r = TCSCalc.computePartialRefund({
     packageCount: '50000000', tpp: '481', nonRefundPercent: '20', amountPaid: '1000',
     totalPackagePrice: '2000',
     packages: [{ price: '1000', selected: true }, { price: '1000', selected: false }]
   });
-  assert.ok(r.ok, 'expected ok, got: ' + r.error);
-  assert.strictEqual(r.count, TCSCalc.MAX_PACKAGES, 'count was not clamped');
-  assert.strictEqual(r.clampedPackageCount, TCSCalc.MAX_PACKAGES);
+  assert.strictEqual(r.ok, false, 'clamped count with 2 priced rows must not compute');
+  assert.ok(
+    new RegExp('Number of Packages is ' + TCSCalc.MAX_PACKAGES + ' but 2 package price rows').test(r.error || ''),
+    'expected the count/rows error, got: ' + r.error);
+  /* clampedPackageCount is the UI contract app.js writes back from; `count`
+     is only carried on success returns. */
+  assert.strictEqual(r.clampedPackageCount, TCSCalc.MAX_PACKAGES,
+    'clamp was not reported on the count/rows error path');
 });
 
 unit('clamp is reported on error returns, not only success', function () {
@@ -1365,6 +1377,42 @@ unit('partial payment keeps working once the total is reconciled', function () {
   var tooMuch = run('999999');
   assert.strictEqual(tooMuch.ok, false, 'overpay check was lost');
   assert.ok(/total trip value/i.test(tooMuch.error || ''), 'wrong error: ' + tooMuch.error);
+});
+
+unit('a package count above the number of priced rows is rejected', function () {
+  /* Number of Packages drives totalTpp (tppEach * count) but the price scan
+     SKIPS rows that do not exist, so a count larger than the rendered rows
+     bills phantom TPP that no row ever reconciles against. The result is a
+     silent under-refund, with no error shown.
+
+     Repro: 3 priced rows totalling $6000 reconcile fine, but count=5 adds
+     2 x $481 of phantom TPP, inflating the non-refundable base and cutting
+     the refund by $962 with no warning.
+
+     The count and the priced rows must agree before any money is computed. */
+  function run(count, rowCount) {
+    var rows = [];
+    for (var i = 0; i < rowCount; i++) {
+      rows.push({ price: i === 0 ? '1000.00' : (i === 1 ? '2000.00' : '3000.00'), selected: true });
+    }
+    return TCSCalc.computePartialRefund({
+      packageCount: String(count), tpp: '481', nonRefundPercent: '20',
+      totalPackagePrice: '6000.00', amountPaid: '7000', packages: rows
+    });
+  }
+
+  var truthful = run(3, 3);
+  assert.strictEqual(truthful.ok, true, 'matching count and rows rejected: ' + truthful.error);
+
+  var desynced = run(5, 3);
+  assert.strictEqual(desynced.ok, false,
+    'count=5 with 3 priced rows was ACCEPTED - phantom TPP silently under-refunds');
+  assert.ok(/number of packages|package count/i.test(desynced.error || ''),
+    'error should name the package count, got: ' + desynced.error);
+
+  /* The phantom TPP must never reach the arithmetic. */
+  assert.notStrictEqual(desynced.totalTpp, 2405,
+    'phantom TPP for 2 non-existent packages was still computed');
 });
 
 unit('the typed total does not drive the allocation', function () {

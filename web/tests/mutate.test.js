@@ -241,6 +241,30 @@ var FAULTS = [
     find: '      return failAfterClamp("Package prices add up to " + formatMoney(totalPackagePrice) +',
     replace: '      return failEarly("Package prices add up to " + formatMoney(totalPackagePrice) +',
     note: 'the package-count clamp must still reach the field on this error path'
+  },
+  {
+    id: 'drop-count-rows-check',
+    label: 'drop the Number of Packages vs priced rows check entirely',
+    file: 'web/assets/js/calc.js',
+    find: '    if (prices.length !== count) {',
+    replace: '    if (false) {',
+    note: 'a count above the priced rows bills phantom TPP and under-refunds'
+  },
+  {
+    id: 'count-rows-allows-greater',
+    label: 'only reject when the count is SMALLER than the rows',
+    file: 'web/assets/js/calc.js',
+    find: '    if (prices.length !== count) {',
+    replace: '    if (prices.length < count && false) {',
+    note: 'the under-refunding direction (count > rows) is the dangerous one'
+  },
+  {
+    id: 'count-rows-fail-early',
+    label: 'make the count/rows error failEarly, losing the clamp write-back',
+    file: 'web/assets/js/calc.js',
+    find: '      return failAfterClamp("Number of Packages is " + count + " but " + prices.length +',
+    replace: '      return failEarly("Number of Packages is " + count + " but " + prices.length +',
+    note: 'the package-count clamp must still reach the field on this error path'
   }
 ];
 

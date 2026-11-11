@@ -555,7 +555,22 @@
         ". Check the individual package prices, including any left blank.");
     }
 
-    /* [HTA 801-805] */
+    /* [HTA 801-812] Number of Packages must match the rows actually priced.
+       totalTpp is tppEach * count, but the scan loop above SKIPS rows that do
+       not exist, so a count larger than the rendered rows bills TPP for
+       phantom packages that no row ever reconciles against. That inflates the
+       non-refundable base and silently UNDER-REFUNDS the customer with no
+       error shown (3 rows priced at $6000 with count=5 loses $962).
+       Placed after the reconciliation check so that error keeps precedence
+       and its clamp contract is unchanged. failAfterClamp, same as its
+       neighbours: an over-cap count must still write back to the field. */
+    if (prices.length !== count) {
+      return failAfterClamp("Number of Packages is " + count + " but " + prices.length +
+        (prices.length === 1 ? " package price row is shown." : " package price rows are shown.") +
+        " Re-enter the Number of Packages so the rows match.");
+    }
+
+    /* [HTA 814-818] */
     if (amountPaid > tripValue) {
       /* runs AFTER the clamp */
       return failAfterClamp("Amount Paid cannot be greater than the total trip value (package prices + TPP).");
