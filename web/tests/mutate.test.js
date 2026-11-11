@@ -201,7 +201,7 @@ var FAULTS = [
   },
   {
     id: 'deposit-bound-off-by-one',
-    label: 'reject a deposit EQUAL to the limit (>= instead of >)',
+    label: 'reject a deposit EQUAL to the limit (`>=` instead of `>`)',
     file: 'web/assets/js/calc.js',
     find: '    if (amountDeposit > maxDeposit) {',
     replace: '    if (amountDeposit >= maxDeposit) {',
@@ -228,7 +228,7 @@ var FAULTS = [
        the gate permanently red. The cents comparison is still the correct
        code: it stays robust if the rounding above ever moves or is removed. */
     id: 'reconciliation-wrong-variable',
-    label: 'reconcile against tripValue instead of totalPackagePrice',
+    label: 'reconcile against `tripValue` instead of `totalPackagePrice`',
     file: 'web/assets/js/calc.js',
     find: '    if (moneyToCents(totalPackagePrice) !== moneyToCents(typedTotalPackagePrice)) {',
     replace: '    if (moneyToCents(tripValue) !== moneyToCents(typedTotalPackagePrice)) {',
@@ -236,7 +236,7 @@ var FAULTS = [
   },
   {
     id: 'reconciliation-fail-early',
-    label: 'make the reconciliation error failEarly, losing the clamp write-back',
+    label: 'make the reconciliation error `failEarly`, losing the clamp write-back',
     file: 'web/assets/js/calc.js',
     find: '      return failAfterClamp("Package prices add up to " + formatMoney(totalPackagePrice) +',
     replace: '      return failEarly("Package prices add up to " + formatMoney(totalPackagePrice) +',
@@ -255,12 +255,12 @@ var FAULTS = [
     label: 'only reject when the count is SMALLER than the rows',
     file: 'web/assets/js/calc.js',
     find: '    if (prices.length !== count) {',
-    replace: '    if (prices.length < count && false) {',
+    replace: '    if (prices.length > count) {',
     note: 'the under-refunding direction (count > rows) is the dangerous one'
   },
   {
     id: 'count-rows-fail-early',
-    label: 'make the count/rows error failEarly, losing the clamp write-back',
+    label: 'make the count/rows error `failEarly`, losing the clamp write-back',
     file: 'web/assets/js/calc.js',
     find: '      return failAfterClamp("Number of Packages is " + count + " but " + prices.length +',
     replace: '      return failEarly("Number of Packages is " + count + " but " + prices.length +',
